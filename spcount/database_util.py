@@ -8,9 +8,9 @@ import gzip
 import subprocess
 from datetime import datetime
 from io import StringIO
-from BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
-from Taxonomy import TaxonomyItem, TaxonomyTree
-from Category import CategoryItem
+from .BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
+from .Taxonomy import TaxonomyItem, TaxonomyTree
+from .Category import CategoryItem
 
 def getCategory(source):
   return(source.replace(" group", "").replace("/", "_").replace(" Bacteria", ""))

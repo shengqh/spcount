@@ -5,7 +5,7 @@ import requests
 import shutil
 import tarfile
 from io import TextIOWrapper
-from Taxonomy import TaxonomyItem
+from .Taxonomy import TaxonomyItem
 
 def prepare_taxonomy(logger, outputFile, force=False):
   if not os.path.exists(outputFile) or force:

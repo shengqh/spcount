@@ -6,11 +6,11 @@ from datetime import datetime
 
 #from spcount.__version__ import __version__
 #from spcount.Taxonomy import prepare_taxonomy
-from __version__ import __version__
-from taxonomy_util import prepare_taxonomy
-from database_util import prepare_database, prepare_index
-from bowtie_util import bowtie, bowtie_fastq2fasta
-from count_util import count
+from .__version__ import __version__
+from .taxonomy_util import prepare_taxonomy
+from .database_util import prepare_database, prepare_index
+from .bowtie_util import bowtie, bowtie_fastq2fasta
+from .count_util import count
 
 def initialize_logger(logfile, args):
   logger = logging.getLogger('spcount')
