@@ -200,7 +200,9 @@ def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGeno
   name = tree.GetItem(taxonomyRootId).Name
 
   if name in nameToFolder:
-    name = nameToFolder[name]
+    ftpname = nameToFolder[name]
+  else:
+    ftpname = name
 
   localDir = os.path.join(outputFolder, name.lower())
   if not os.path.exists(localDir):
@@ -214,7 +216,7 @@ def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGeno
   if not os.path.exists(fastaDir):
     os.mkdir(fastaDir)
 
-  rootFile = download_assembly_summary(logger, name, localDir, prefix)
+  rootFile = download_assembly_summary(logger, ftpname, localDir, prefix)
 
   targetFile = extract_complete_genome(logger, rootFile, idMap)
   
