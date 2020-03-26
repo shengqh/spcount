@@ -88,8 +88,8 @@ def count(logger, inputListFile, outputFile, countListFile):
     bowtieFile = bowtieFileMap[sample]
 
     #for debug
-    if not os.path.exists(bowtieFile):
-      continue
+    #if not os.path.exists(bowtieFile):
+    #  continue
 
     logger.info("Processing %s ..." % bowtieFile)
 

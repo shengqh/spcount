@@ -89,6 +89,7 @@ def main():
     sys.exit(1)
 
   args = parser.parse_args()
+  #args.command = "database"
   
   if args.command == "taxonomy":
     if DEBUG:
@@ -98,11 +99,12 @@ def main():
     prepare_taxonomy(logger, args.output)
   elif args.command == "database":
     if DEBUG:
-      args.input = "2"
+      #args.input = "2"
+      args.input = "10239"
       args.taxonomyFile = "/scratch/cqs_share/references/taxonomy/20200321_taxonomy.txt"
       args.maxGenomeInFile = 500
       args.outputFolder = "/scratch/cqs_share/references/refseq"
-      args.prefix = "20200321_"
+      #args.prefix = "20200321_"
     if args.prefix == None:
       now = datetime.now()
       args.prefix = now.strftime("%Y%m%d_")

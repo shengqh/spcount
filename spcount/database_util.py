@@ -13,7 +13,7 @@ from .Taxonomy import TaxonomyItem, TaxonomyTree
 from .Category import CategoryItem
 
 def getCategory(source):
-  return(source.replace(" group", "").replace("/", "_").replace(" Bacteria", ""))
+  return(source.replace(" group", "").replace("/", "_").replace(" Bacteria", "").replace(" ", "_"))
 
 def combine_category_fasta_file(logger, maxGenomeInFile, localDir, prefix, targetFile, localFileMap):
   categoryFile = targetFile + ".list"
@@ -139,7 +139,7 @@ def extract_complete_genome(logger, rootFile, idMap):
 
   return(result)
 
-def download_assembly_genomes(logger, name, genomeRootDir, targetFile):
+def download_assembly_genomes(logger, name, ftpname, genomeRootDir, targetFile):
   logger.info("Checking %s ... " % targetFile)
 
   totalCount = 0
@@ -179,7 +179,7 @@ def download_assembly_genomes(logger, name, genomeRootDir, targetFile):
       logger.info("Downloading %d/%d: %s to %s ..." % (currentCount, totalCount, fnaFile, tmpFile))
       with open(tmpFile, "wb") as f:
         if ftp == None:
-          ftp = open_ftp(name)
+          ftp = open_ftp(ftpname)
         ftp.retrbinary("RETR " + fnaFile, f.write)
       open(tmpDoneFile, 'wt').close()
 
@@ -191,7 +191,7 @@ def download_assembly_genomes(logger, name, genomeRootDir, targetFile):
 def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGenomeInFile, prefix):
   tree = TaxonomyTree()
 
-  nameToFolder = {'viruses':'viral'}
+  nameToFolder = {'Viruses':'viral'}
 
   logger.info("Reading taxonomy from %s ..." % taxonomyFile)
   tree.ReadFromFile(taxonomyFile)
@@ -203,6 +203,8 @@ def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGeno
     ftpname = nameToFolder[name]
   else:
     ftpname = name
+
+  logger.info("ftpname=%s" % ftpname)
 
   localDir = os.path.join(outputFolder, name.lower())
   if not os.path.exists(localDir):
@@ -220,7 +222,7 @@ def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGeno
 
   targetFile = extract_complete_genome(logger, rootFile, idMap)
   
-  localFileMap = download_assembly_genomes(logger, name, cacheDir, targetFile)
+  localFileMap = download_assembly_genomes(logger, name, ftpname, cacheDir, targetFile)
 
   categoryFile = combine_category_fasta_file(logger, maxGenomeInFile, fastaDir, prefix, targetFile, localFileMap)
 
