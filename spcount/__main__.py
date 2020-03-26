@@ -103,6 +103,9 @@ def main():
       args.maxGenomeInFile = 500
       args.outputFolder = "/scratch/cqs_share/references/refseq"
       args.prefix = "20200321_"
+    if args.prefix == None:
+      now = datetime.now()
+      args.prefix = now.strftime("%Y%m%d_")
     logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database.log"), args)
     print(args)
     prepare_database(logger, args.input, args.outputFolder, args.taxonomyFile, args.maxGenomeInFile, args.prefix)

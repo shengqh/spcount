@@ -188,7 +188,7 @@ def download_assembly_genomes(logger, name, genomeRootDir, targetFile):
 
   return(localFileMap)
 
-def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGenomeInFile, prefix=None):
+def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGenomeInFile, prefix):
   tree = TaxonomyTree()
 
   logger.info("Reading taxonomy from %s ..." % taxonomyFile)
@@ -208,10 +208,6 @@ def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGeno
   fastaDir = os.path.join(localDir, "fasta")
   if not os.path.exists(fastaDir):
     os.mkdir(fastaDir)
-
-  if prefix == None:
-    now = datetime.now()
-    prefix = now.strftime("%Y%m%d_")
 
   rootFile = download_assembly_summary(logger, name, localDir, prefix)
 
