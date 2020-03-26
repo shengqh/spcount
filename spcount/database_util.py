@@ -191,11 +191,16 @@ def download_assembly_genomes(logger, name, genomeRootDir, targetFile):
 def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGenomeInFile, prefix):
   tree = TaxonomyTree()
 
+  nameToFolder = {'viruses':'viral'}
+
   logger.info("Reading taxonomy from %s ..." % taxonomyFile)
   tree.ReadFromFile(taxonomyFile)
 
   idMap = tree.BuildChildIdParentNameMap(taxonomyRootId)
   name = tree.GetItem(taxonomyRootId).Name
+
+  if name in nameToFolder:
+    name = nameToFolder[name]
 
   localDir = os.path.join(outputFolder, name.lower())
   if not os.path.exists(localDir):
