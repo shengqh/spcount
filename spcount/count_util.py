@@ -17,12 +17,13 @@ def readFileMap(fileName):
   return(result)
 
 class BowtieCountItem(object):
-  def __init__(self, queryName, strand, chromosome, zeroBasedOffset, category, count=1):
+  def __init__(self, queryName, strand, chromosome, zeroBasedOffset, category, sample, count=1):
     self.QueryName = queryName
     self.Strand = strand
     self.Chromosome = chromosome
     self.ZeroBasedOffset = zeroBasedOffset
     self.Category = category
+    self.Sample = sample
     self.Count = count
     self.Sequence = ''
 
@@ -76,7 +77,105 @@ def fillQueryCount(logger, queryMap, countFile):
         item.Count = count
         item.Sequence = sequence  
 
+def getQueryMap(bowtieItems):
+  result = {}
+  for item in bowtieItems:
+    result.setdefault(item.QueryName, []).append(item)
+  return(result)
+
+def getCategoryMap(bowtieItems):
+  result = {}
+  for item in bowtieItems:
+    result.setdefault(item.Category, []).append(item)
+  return(result)
+
+def getCategoryUniqueCountMap(bowtieItems):
+  result = {}
+  for item in bowtieItems:
+    if item.Category not in result:
+      result[item.Category] = 1
+    else:
+      result[item.Category] = result[item.Category] + 1
+  return(result)
+
+def assignCount(queryMap, bowtieItems):
+  catCountMap = getCategoryUniqueCountMap(bowtieItems)
+  for items in queryMap.values():
+    catCounts = [catCountMap[item.Category] for item in items]
+    totalCount = sum(catCounts)
+    proportion = [cc / totalCount for cc in catCounts]
+    for idx in range(0, len(proportion)):
+      items[idx].Count = items[idx].Count * proportion[idx]
+
+def getCategoryCountMap(bowtieItems):
+  result = {}
+  for item in bowtieItems:
+    #print("%s\t%d" %(item.Category, item.Count))
+    if item.Category not in result:
+      result[item.Category] = 0
+    result[item.Category] = result[item.Category] + item.Count
+  return(result)
+
 def count(logger, inputListFile, outputFile, countListFile):
+  logger.info("Start count ...")
+
+  bowtieFileMap = readFileMap(inputListFile)
+  countFileMap = readFileMap(countListFile) if countListFile != None else {}
+
+  # icount = 0
+  finalItems = []
+  for sample in bowtieFileMap.keys():
+    bowtieFile = bowtieFileMap[sample]
+
+    #for debug
+    #if not os.path.exists(bowtieFile):
+    #  continue
+
+    logger.info("Processing %s ..." % bowtieFile)
+
+    bowtieItems = []
+    with open(bowtieFile, "rt") as fin:
+      for line in fin:
+        parts = line.rstrip().split('\t')
+        queryName = parts[0]
+        bowtieItems.append(BowtieCountItem(queryName, parts[1], parts[2], parts[3], parts[4], sample))
+
+    queryMap = getQueryMap(bowtieItems)
+
+    if sample in countFileMap:
+      logger.info("filling count from %s ..." % countFile)
+      countFile = countFileMap[sample]
+      fillQueryCount(logger, queryMap, countFile)
+
+    assignCount(logger, queryMap, bowtieItems)
+
+    finalItems.extends(bowtieItems)
+
+  samples = sorted(list(set([bi.Sample for bi in finalItems])))
+
+  categorySet = list(set([bi.Category for bi in finalItems]))
+  
+  catCount = [[cat, sum(v[cat].TotalCount for v in finalMap.values() if cat in v)] for cat in categorySet]
+  catCount.sort(key=lambda r:-r[1])
+
+  categories = list(cat[0] for cat in catCount)
+  
+  logger.info("Writing to %s" % outputFile)
+  with open(outputFile, "wt") as fout:
+    fout.write("Category\t%s\n" % "\t".join(samples))
+    for catName in categories:
+      fout.write(catName)
+      for sample in samples:
+        catMap = finalMap[sample]
+        if catName in catMap:
+          fout.write("\t%.2lf" % finalMap[sample][catName].TotalCount)
+        else:
+          fout.write("\t0")
+      fout.write("\n")
+
+  logger.info("done")
+
+def count_old(logger, inputListFile, outputFile, countListFile):
   logger.info("Start count ...")
 
   bowtieFileMap = readFileMap(inputListFile)
