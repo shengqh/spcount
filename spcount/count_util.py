@@ -143,8 +143,8 @@ def count(logger, inputListFile, outputFile, countListFile):
     queryMap = getQueryMap(bowtieItems)
 
     if sample in countFileMap:
-      logger.info("filling count from %s ..." % countFile)
       countFile = countFileMap[sample]
+      logger.info("filling count from %s ..." % countFile)
       fillQueryCount(logger, queryMap, countFile)
 
     assignCount(logger, queryMap, bowtieItems)
