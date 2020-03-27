@@ -57,6 +57,7 @@ def main():
   # create the parser for the "database" command
   parser_p = subparsers.add_parser('database')
   parser_p.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
+  parser_p.add_argument('-n', '--name', action='store', nargs='?', help='Input root taxonomy name in ncbi refseq database folder)', required=NOT_DEBUG)
   parser_p.add_argument('--taxonomyFile', action='store', nargs='?', help='Input taxonomy file', required=NOT_DEBUG)
   parser_p.add_argument('--maxGenomeInFile', action='store',  type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
   parser_p.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
