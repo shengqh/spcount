@@ -22,7 +22,7 @@ def find_version(*file_paths):
 
 PKG = "spcount"
 
-version = find_version(PKG, "__version__.py")
+version = find_version("__version__.py")
 
 setuptools.setup(
     name=PKG,

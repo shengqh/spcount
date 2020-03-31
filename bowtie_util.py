@@ -6,7 +6,8 @@ import gzip
 import math
 import subprocess
 from _ctypes import ArgumentError
-from .BowtieIndex import BowtieIndexItem, readBowtieIndexList
+
+from BowtieIndex import BowtieIndexItem, readBowtieIndexList
 
 def bowtie(logger, inputFile, outputFile, databaseListFile, thread, isFasta=False):
   logger.info("Start bowtie ...")

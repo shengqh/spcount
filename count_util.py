@@ -27,7 +27,7 @@ class BowtieCountItem(object):
     self.Count = count
     self.Sequence = ''
 
-class CategoryItem(object):
+class CategoryEntry(object):
   def __init__(self, name):
     self.Name = name
     self.TotalCount = 0
@@ -201,7 +201,7 @@ def count_old(logger, inputListFile, outputFile, countListFile):
 
     catMap = {}
     for item in bowtieItems:
-      catMap.setdefault(item.Category, CategoryItem(item.Category)).Items.append(item)
+      catMap.setdefault(item.Category, CategoryEntry(item.Category)).Items.append(item)
 
     #catMap = removeSubset(logger, catMap)
 

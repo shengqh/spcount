@@ -5,15 +5,67 @@ import os
 import csv
 import ftplib
 import gzip
+import requests
+import shutil
+import tarfile
 import subprocess
 from datetime import datetime
-from io import StringIO
-from .BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
-from .Taxonomy import TaxonomyItem, TaxonomyTree
-from .Category import CategoryItem
+from io import StringIO, TextIOWrapper
+
+from BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
+from Taxonomy import TaxonomyItem, TaxonomyTree
+
+class CategoryItem(object):
+  def __init__(self, fileHandle, index, numberOfGenome):
+    self.FileHandle = fileHandle
+    self.Index = index
+    self.NumberOfGenome = numberOfGenome
 
 def getCategory(source):
   return(source.replace(" group", "").replace("/", "_").replace(" Bacteria", "").replace(" ", "_"))
+
+def prepare_taxonomy(logger, outputFile):
+  if os.path.exists(outputFile):
+    return
+
+  #download taxonomy from ncbi
+  url="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
+  targetFile = outputFile + "." + os.path.basename(url)
+  logger.info("Downloading %s ..." % url)
+  r = requests.get(url, verify=False, stream=True)
+  r.raw.decode_content = True
+  with open(targetFile, 'wb') as f:
+    shutil.copyfileobj(r.raw, f)
+
+  #prepare taxonomy file with three columns: id, parentid, name
+  with tarfile.open(targetFile, "r:gz") as tar:
+    taxonomies = []
+    logger.info("Reading names.dmp ...")
+    with TextIOWrapper(tar.extractfile(tar.getmember('names.dmp'))) as fin:
+      for line in fin:
+        if "scientific name" in line:
+          parts = line.split('|')
+          id = parts[0].strip()
+          name = parts[1].strip()
+          taxonomies.append(TaxonomyItem(name, id))
+
+    taxonomyMap = {item.Id:item for item in taxonomies}
+
+    logger.info("Reading nodes.dmp ...")
+    with TextIOWrapper(tar.extractfile(tar.getmember('nodes.dmp'))) as fin:
+      for line in fin:
+        parts = line.split('|')
+        childId = parts[0].strip()
+        parentId = parts[1].strip()
+        taxonomyMap[childId].ParentId = parentId
+
+    with open(outputFile, "wt") as fout:
+      fout.write("Id\tParentId\tScientificName\n")
+      for item in taxonomies:
+        fout.write("%s\t%s\t%s\n" % (item.Id, item.ParentId, item.Name))
+  
+  os.remove(targetFile)
+  return
 
 def combine_category_fasta_file(logger, maxGenomeInFile, localDir, prefix, targetFile, localFileMap):
   categoryFile = targetFile + ".list"
@@ -77,36 +129,36 @@ def combine_category_fasta_file(logger, maxGenomeInFile, localDir, prefix, targe
   open(categoryFileDone, 'wt').close()
   return(categoryFile)
 
-def open_ftp(name):
-  rootDir = "/genomes/refseq/" + name.lower() + "/"
+def open_ftp():
+  rootDir = ""
   result = ftplib.FTP("ftp.ncbi.nlm.nih.gov")
   result.login("anonymous", "quanhu.sheng.1@vumc.org")
   result.cwd(rootDir)
   return(result)
 
-def download_assembly_summary(logger, name, localDir, date_time):
-  summaryFile = "assembly_summary.txt"
-  result = os.path.join(localDir, date_time + summaryFile)
+def download_assembly_summary(logger, localDir, prefix):
+  summaryFile =  "/genomes/refseq/assembly_summary_refseq.txt"
+  result = os.path.join(localDir, prefix + os.path.basename(summaryFile))
   
   if os.path.exists(result):
     return(result)
 
-  logger.info("Downloading assembly_summary.txt ...")
-  with open_ftp(name) as ftp:
+  logger.info("Downloading %s ..." % summaryFile)
+  with open_ftp() as ftp:
     with open(result, "wb") as f:
       ftp.retrbinary("RETR " + summaryFile, f.write)
 
   return(result)
 
-def extract_complete_genome(logger, rootFile, idMap):
-  result = rootFile + ".files"
+def extract_complete_genome(logger, rootFile, idMap, taxonomyRootId):
+  result = "%s.%s.files" % (rootFile, taxonomyRootId)
 
   if os.path.exists(result):
     return(result)
 
   with open(result, "wt") as fout:
     fout.write("Type\tAccession\tCategory\tFile\n")
-    logger.info("Reading assembly_summary.txt ...")
+    logger.info("Reading %s ..." % rootFile)
     with open(rootFile, "rt") as fin:
       count = 0
       for line in fin:
@@ -122,7 +174,7 @@ def extract_complete_genome(logger, rootFile, idMap):
         version_status = parts[10]
         assembly_level = parts[11]
   
-        if (assembly_level != "Complete Genome") or (version_status != "latest"):
+        if ("Complete Genome" not in assembly_level) or (version_status != "latest"):
           continue
   
         count = count + 1
@@ -139,7 +191,7 @@ def extract_complete_genome(logger, rootFile, idMap):
 
   return(result)
 
-def download_assembly_genomes(logger, name, ftpname, genomeRootDir, targetFile):
+def download_assembly_genomes(logger, genomeRootDir, targetFile):
   logger.info("Checking %s ... " % targetFile)
 
   totalCount = 0
@@ -179,7 +231,7 @@ def download_assembly_genomes(logger, name, ftpname, genomeRootDir, targetFile):
       logger.info("Downloading %d/%d: %s to %s ..." % (currentCount, totalCount, fnaFile, tmpFile))
       with open(tmpFile, "wb") as f:
         if ftp == None:
-          ftp = open_ftp(ftpname)
+          ftp = open_ftp()
         ftp.retrbinary("RETR " + fnaFile, f.write)
       open(tmpDoneFile, 'wt').close()
 
@@ -188,23 +240,18 @@ def download_assembly_genomes(logger, name, ftpname, genomeRootDir, targetFile):
 
   return(localFileMap)
 
-def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGenomeInFile, prefix):
-  tree = TaxonomyTree()
-
-  nameToFolder = {'Viruses':'viral'}
+def prepare_database(logger, taxonomyRootId, outputFolder, maxGenomeInFile, prefix):
+  taxonomyFile = os.path.join(outputFolder, prefix + "taxonomy.txt")
+  
+  logger.info("Preparing taxonomy file %s ..." % taxonomyFile)
+  prepare_taxonomy(logger, taxonomyFile)
 
   logger.info("Reading taxonomy from %s ..." % taxonomyFile)
+  tree = TaxonomyTree()
   tree.ReadFromFile(taxonomyFile)
 
   idMap = tree.BuildChildIdParentNameMap(taxonomyRootId)
-  name = tree.GetItem(taxonomyRootId).Name
-
-  if name in nameToFolder:
-    ftpname = nameToFolder[name]
-  else:
-    ftpname = name
-
-  logger.info("ftpname=%s" % ftpname)
+  name = tree.GetItem(taxonomyRootId).Name.replace(" ", "_") + "." + taxonomyRootId
 
   localDir = os.path.join(outputFolder, name.lower())
   if not os.path.exists(localDir):
@@ -218,11 +265,15 @@ def prepare_database(logger, taxonomyRootId, outputFolder, taxonomyFile, maxGeno
   if not os.path.exists(fastaDir):
     os.mkdir(fastaDir)
 
-  rootFile = download_assembly_summary(logger, ftpname, localDir, prefix)
+  rootFile = download_assembly_summary(logger, localDir, prefix)
 
-  targetFile = extract_complete_genome(logger, rootFile, idMap)
+  with open(rootFile + "." + taxonomyRootId + ".idmap", "wt") as fout:
+    for id in idMap:
+      fout.write("%s\t%s\n" % ( id, idMap[id]))
+
+  targetFile = extract_complete_genome(logger, rootFile, idMap, taxonomyRootId)
   
-  localFileMap = download_assembly_genomes(logger, name, ftpname, cacheDir, targetFile)
+  localFileMap = download_assembly_genomes(logger, cacheDir, targetFile)
 
   categoryFile = combine_category_fasta_file(logger, maxGenomeInFile, fastaDir, prefix, targetFile, localFileMap)
 
@@ -280,3 +331,9 @@ def prepare_index(logger, categoryFile, thread, force=False, slurm=False, slurmE
 
   logger.info("Please submit job using %s" % submitFile)
   return
+
+if __name__ == "__main__":
+  logger = logging.getLogger('database')
+  logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)-8s - %(message)s')
+  prepare_database(logger, '11118', "/scratch/cqs/shengq2/temp/", 500, "20200330_")
+

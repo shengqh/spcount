@@ -4,13 +4,10 @@ import logging
 import os
 from datetime import datetime
 
-#from spcount.__version__ import __version__
-#from spcount.Taxonomy import prepare_taxonomy
-from .__version__ import __version__
-from .taxonomy_util import prepare_taxonomy
-from .database_util import prepare_database, prepare_index
-from .bowtie_util import bowtie, bowtie_fastq2fasta
-from .count_util import count
+from __version__ import __version__
+from database_util import prepare_database, prepare_index
+from bowtie_util import bowtie, bowtie_fastq2fasta
+from count_util import count
 
 def initialize_logger(logfile, args):
   logger = logging.getLogger('spcount')
@@ -50,15 +47,10 @@ def main():
   
   subparsers = parser.add_subparsers(dest="command")
 
-  # create the parser for the "taxonomy" command
-  parser_d = subparsers.add_parser('taxonomy')
-  parser_d.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
-
   # create the parser for the "database" command
   parser_p = subparsers.add_parser('database')
   parser_p.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
   parser_p.add_argument('-n', '--name', action='store', nargs='?', help='Input root taxonomy name in ncbi refseq database folder)', required=NOT_DEBUG)
-  parser_p.add_argument('--taxonomyFile', action='store', nargs='?', help='Input taxonomy file', required=NOT_DEBUG)
   parser_p.add_argument('--maxGenomeInFile', action='store',  type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
   parser_p.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
   parser_p.add_argument('-o', '--outputFolder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
@@ -92,17 +84,10 @@ def main():
   args = parser.parse_args()
   #args.command = "database"
   
-  if args.command == "taxonomy":
-    if DEBUG:
-      args.output = "/scratch/cqs_share/references/taxonomy/20200321_taxonomy.txt"
-    logger = initialize_logger(args.output + "_spcount_taxonomy.log", args)
-    print(args)
-    prepare_taxonomy(logger, args.output)
-  elif args.command == "database":
+  if args.command == "database":
     if DEBUG:
       #args.input = "2"
       args.input = "10239"
-      args.taxonomyFile = "/scratch/cqs_share/references/taxonomy/20200321_taxonomy.txt"
       args.maxGenomeInFile = 500
       args.outputFolder = "/scratch/cqs_share/references/refseq"
       #args.prefix = "20200321_"
@@ -111,7 +96,7 @@ def main():
       args.prefix = now.strftime("%Y%m%d_")
     logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database.log"), args)
     print(args)
-    prepare_database(logger, args.input, args.outputFolder, args.taxonomyFile, args.maxGenomeInFile, args.prefix)
+    prepare_database(logger, args.input, args.outputFolder, args.maxGenomeInFile, args.prefix)
   elif args.command == "index":
     if DEBUG:
       args.input = "/scratch/cqs_share/references/refseq/bacteria/20200321_assembly_summary.txt.files.list"
@@ -142,4 +127,4 @@ def main():
     count(logger, args.input, args.output, args.countFile)
   
 if __name__ == "__main__":
-    main()
+  main()
