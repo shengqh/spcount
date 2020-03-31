@@ -50,7 +50,7 @@ def main():
   # create the parser for the "database" command
   parser_p = subparsers.add_parser('database')
   parser_p.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
-  parser_p.add_argument('-n', '--name', action='store', nargs='?', help='Input root taxonomy name in ncbi refseq database folder)', required=NOT_DEBUG)
+  parser_p.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
   parser_p.add_argument('--maxGenomeInFile', action='store',  type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
   parser_p.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
   parser_p.add_argument('-o', '--outputFolder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
@@ -89,14 +89,17 @@ def main():
       #args.input = "2"
       args.input = "10239"
       args.maxGenomeInFile = 500
-      args.outputFolder = "/scratch/cqs_share/references/refseq"
-      #args.prefix = "20200321_"
+      args.outputFolder = "/scratch/cqs_share/references/genbank"
+      args.refseq = False
+
     if args.prefix == None:
       now = datetime.now()
       args.prefix = now.strftime("%Y%m%d_")
+
+    database = "refseq" if args.refseq else "genbank"
     logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database.log"), args)
     print(args)
-    prepare_database(logger, args.input, args.outputFolder, args.maxGenomeInFile, args.prefix)
+    prepare_database(logger, args.input, args.outputFolder, args.maxGenomeInFile, args.prefix, database)
   elif args.command == "index":
     if DEBUG:
       args.input = "/scratch/cqs_share/references/refseq/bacteria/20200321_assembly_summary.txt.files.list"

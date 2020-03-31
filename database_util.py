@@ -136,8 +136,8 @@ def open_ftp():
   result.cwd(rootDir)
   return(result)
 
-def download_assembly_summary(logger, localDir, prefix):
-  summaryFile =  "/genomes/refseq/assembly_summary_refseq.txt"
+def download_assembly_summary(logger, localDir, prefix, database="genbank"):
+  summaryFile =  "/genomes/%s/assembly_summary_%s.txt" % (database, database)
   result = os.path.join(localDir, prefix + os.path.basename(summaryFile))
   
   if os.path.exists(result):
@@ -150,46 +150,73 @@ def download_assembly_summary(logger, localDir, prefix):
 
   return(result)
 
-def extract_complete_genome(logger, rootFile, idMap, taxonomyRootId):
-  result = "%s.%s.files" % (rootFile, taxonomyRootId)
+class GenomeItem :
+  def __init__(self, taxonomyId, accession, name, assemblyLevel, assemblyLevelIndex, urlFile):
+    self.TaxonomyId = taxonomyId
+    self.Accession = accession
+    self.Name = name
+    self.AssemblyLevel = assemblyLevel
+    self.AssemblyLevelIndex = assemblyLevelIndex
+    self.UrlFile = urlFile
 
-  if os.path.exists(result):
-    return(result)
+def extract_unique_genome_priority(logger, rootFile, idCategoryMap, taxonomyRootId, priorityLevels):
+  priorStr = "_".join([s[0:4] for s in priorityLevels])
+
+  result = "%s.%s.%s.files" % (rootFile, taxonomyRootId, priorStr)
+
+  levels = priorityLevels[::-1]
+
+  idItemMap = {}
+  logger.info("Reading %s ..." % rootFile)
+  with open(rootFile, "rt") as fin:
+    count = 0
+    for line in fin:
+      if line.startswith('#'):
+        continue
+
+      parts = line.split('\t')
+      version_status = parts[10]
+
+      if (version_status != "latest"):
+        continue
+
+      taxidstr = parts[5]
+
+      if taxidstr not in idCategoryMap:
+        continue
+
+      taxid = int(taxidstr)
+
+      assemblyLevel = parts[11]
+      assemblyLevelIndex = levels.index(assemblyLevel)
+
+      if taxid in idItemMap:
+        if idItemMap[taxid].AssemblyLevelIndex > assemblyLevelIndex:
+          continue
+
+      accession = parts[0]
+      name = parts[7]
+      url = parts[19]
+      folderName = os.path.basename(url)
+      fnaFile = url + "/" + folderName + "_genomic.fna.gz"
+      urlFile = fnaFile.replace("ftp://ftp.ncbi.nlm.nih.gov", "")
+      idItemMap[taxid] = GenomeItem(taxid, accession, name, assemblyLevel, assemblyLevelIndex, urlFile)
 
   with open(result, "wt") as fout:
-    fout.write("Type\tAccession\tCategory\tFile\n")
-    logger.info("Reading %s ..." % rootFile)
-    with open(rootFile, "rt") as fin:
-      count = 0
-      for line in fin:
-        if line.startswith('#'):
-          continue
-
-        parts = line.split('\t')
-        taxid = parts[5]
-  
-        if taxid not in idMap:
-          continue
-  
-        version_status = parts[10]
-        assembly_level = parts[11]
-  
-        if ("Complete Genome" not in assembly_level) or (version_status != "latest"):
-          continue
-  
-        count = count + 1
-        if count % 1000 == 0:
-          #break
-          print(count)
-  
-        accession = parts[0]
-        url = parts[19]
-        folderName = os.path.basename(url)
-        fnaFile = url + "/" + folderName + "_genomic.fna.gz"
-        urlFile = fnaFile.replace("ftp://ftp.ncbi.nlm.nih.gov", "")
-        fout.write("Complete Genome\t%s\t%s\t%s\n" % (accession, idMap[taxid], urlFile))
+    fout.write("Type\tAccession\tCategory\tFile\tTaxonomyId\tName\n")
+    for taxid in sorted(idItemMap.keys()):
+      gi = idItemMap[taxid]
+      fout.write("%s\t%s\t%s\t%s\t%s\t%s\n" % (gi.AssemblyLevel, gi.Accession, idCategoryMap[str(taxid)], gi.UrlFile, gi.TaxonomyId, gi.Name))
 
   return(result)
+
+def extract_unique_genome(logger, rootFile, idMap, taxonomyRootId, completeGenomeOnly=False):
+  if completeGenomeOnly:
+    priorityLevels = ["Complete Genome"]
+  else:
+    priorityLevels = ["Complete Genome", "Scaffold", "Contig", "Chromosome"]
+
+  return(extract_unique_genome_priority(logger, rootFile, idMap, taxonomyRootId, priorityLevels))
 
 def download_assembly_genomes(logger, genomeRootDir, targetFile):
   logger.info("Checking %s ... " % targetFile)
@@ -240,7 +267,7 @@ def download_assembly_genomes(logger, genomeRootDir, targetFile):
 
   return(localFileMap)
 
-def prepare_database(logger, taxonomyRootId, outputFolder, maxGenomeInFile, prefix):
+def prepare_database(logger, taxonomyRootId, outputFolder, maxGenomeInFile, prefix, database="genbank"):
   taxonomyFile = os.path.join(outputFolder, prefix + "taxonomy.txt")
   
   logger.info("Preparing taxonomy file %s ..." % taxonomyFile)
@@ -265,13 +292,13 @@ def prepare_database(logger, taxonomyRootId, outputFolder, maxGenomeInFile, pref
   if not os.path.exists(fastaDir):
     os.mkdir(fastaDir)
 
-  rootFile = download_assembly_summary(logger, localDir, prefix)
+  rootFile = download_assembly_summary(logger, localDir, prefix, database)
 
   with open(rootFile + "." + taxonomyRootId + ".idmap", "wt") as fout:
     for id in idMap:
       fout.write("%s\t%s\n" % ( id, idMap[id]))
 
-  targetFile = extract_complete_genome(logger, rootFile, idMap, taxonomyRootId)
+  targetFile = extract_unique_genome(logger, rootFile, idMap, taxonomyRootId, False)
   
   localFileMap = download_assembly_genomes(logger, cacheDir, targetFile)
 
@@ -335,5 +362,5 @@ def prepare_index(logger, categoryFile, thread, force=False, slurm=False, slurmE
 if __name__ == "__main__":
   logger = logging.getLogger('database')
   logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)-8s - %(message)s')
-  prepare_database(logger, '11118', "/scratch/cqs/shengq2/temp/", 500, "20200330_")
+  prepare_database(logger, '11118', "/scratch/cqs_share/references/genbank", 500, "20200331_")
 
