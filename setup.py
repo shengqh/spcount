@@ -38,7 +38,6 @@ setuptools.setup(
         'console_scripts': ['spcount=spcount.__main__:main'],
     },
     packages=['spcount'],
-    package_dir={'spcount': 'spcount'},
     install_requires=['argparse' ],
     classifiers=[
         "Programming Language :: Python :: 3",
