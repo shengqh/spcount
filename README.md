@@ -20,6 +20,12 @@ export PATH=$PATH:~/bowtie-${BOWTIE_VERSION}-linux-x86_64
 Install python main package
 
 ```
+pip install spcount
+```
+
+Or you can install from github directly
+
+```
 pip install git+git://github.com/shengqh/spcount.git
 ```
 

@@ -12,8 +12,8 @@ import subprocess
 from datetime import datetime
 from io import StringIO, TextIOWrapper
 
-from BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
-from Taxonomy import TaxonomyItem, TaxonomyTree
+from .BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
+from .Taxonomy import TaxonomyItem, TaxonomyTree
 
 class CategoryItem(object):
   def __init__(self, fileHandle, index, numberOfGenome):

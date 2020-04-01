@@ -22,7 +22,7 @@ def find_version(*file_paths):
 
 PKG = "spcount"
 
-version = find_version("__version__.py")
+version = find_version("spcount/__version__.py")
 
 setuptools.setup(
     name=PKG,
@@ -37,7 +37,8 @@ setuptools.setup(
     entry_points = {
         'console_scripts': ['spcount=spcount.__main__:main'],
     },
-    packages=['spcount'],
+    packages=setuptools.find_packages(exclude=["tests", "tests.*", "scripts"]),
+    package_data={'': ['spcount/slurm.template']},
     install_requires=['argparse' ],
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -45,6 +46,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     include_package_data=True,
-    zip_safe=False
+    zip_safe=False,
+    python_requires='>=3.6',
 )
 
