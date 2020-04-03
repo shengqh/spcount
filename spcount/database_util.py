@@ -10,9 +10,10 @@ import shutil
 import tarfile
 import subprocess
 from datetime import datetime
-from io import StringIO, TextIOWrapper
+from io import BytesIO, StringIO, TextIOWrapper
 
 from .BowtieIndex import BowtieIndexItem, readBowtieIndexList, writeBowtieIndexList
+from .GenomeItem import GenomeItem, writeGenomeItems, readGenomeItems
 from .Taxonomy import TaxonomyItem, TaxonomyTree
 
 class CategoryItem(object):
@@ -27,6 +28,8 @@ def getCategory(source):
 def prepare_taxonomy(logger, outputFile):
   if os.path.exists(outputFile):
     return
+
+  logger.info("Preparing taxonomy file %s ..." % taxonomyFile)
 
   #download taxonomy from ncbi
   url="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
@@ -69,7 +72,7 @@ def prepare_taxonomy(logger, outputFile):
 
 def combine_category_fasta_file(logger, maxGenomeInFile, localDir, prefix, targetFile, localFileMap):
   categoryFile = targetFile + ".list"
-  categoryFileDone = categoryFile + ".done"
+  categoryFileDone = get_done_file(categoryFile)
 
   if os.path.exists(categoryFileDone):
     return(categoryFile)
@@ -79,46 +82,45 @@ def combine_category_fasta_file(logger, maxGenomeInFile, localDir, prefix, targe
   bowtieIndecies = []
   foutMap = {}
   currentCount = 0
-  with open(targetFile, "rt") as fin:
-    fin.readline()
-    for line in fin:
-      parts = line.rstrip().split('\t')
 
-      category = getCategory(parts[2])
+  giItems = readGenomeItems(targetFile)
 
-      if not category in foutMap.keys():
-        subName = "%s%s_%03d" % (prefix, category, 1)
+  for gi in giItems:
+    category = gi.Category
+
+    if not category in foutMap.keys():
+      subName = "%s%s_%03d" % (prefix, category, 1)
+      bowtieIndex = os.path.join(localDir, subName)
+      categoryFastaFile = bowtieIndex + ".fasta"
+      logger.info("Init " + categoryFastaFile)
+      #cat = CategoryItem(None, 1, 1)
+      cat = CategoryItem(open(categoryFastaFile, "wb"), 1, 1)
+      foutMap[category] = cat
+      bowtieIndecies.append(BowtieIndexItem(bowtieIndex, category, categoryFastaFile))
+    else:
+      cat = foutMap[category]
+      if cat.NumberOfGenome >= maxGenomeInFile:
+        cat.FileHandle.close()
+        cat.Index = cat.Index + 1
+        cat.NumberOfGenome = 1
+        subName = "%s%s_%03d" % (prefix, category, cat.Index)
         bowtieIndex = os.path.join(localDir, subName)
         categoryFastaFile = bowtieIndex + ".fasta"
-        logger.info("Init " + categoryFastaFile)
-        #cat = CategoryItem(None, 1, 1)
-        cat = CategoryItem(open(categoryFastaFile, "wb"), 1, 1)
-        foutMap[category] = cat
+        logger.info("Re-init " + categoryFastaFile)
+        cat.FileHandle = open(categoryFastaFile, "wb")
         bowtieIndecies.append(BowtieIndexItem(bowtieIndex, category, categoryFastaFile))
       else:
-        cat = foutMap[category]
-        if cat.NumberOfGenome >= maxGenomeInFile:
-          cat.FileHandle.close()
-          cat.Index = cat.Index + 1
-          cat.NumberOfGenome = 1
-          subName = "%s%s_%03d" % (prefix, category, cat.Index)
-          bowtieIndex = os.path.join(localDir, subName)
-          categoryFastaFile = bowtieIndex + ".fasta"
-          logger.info("Re-init " + categoryFastaFile)
-          cat.FileHandle = open(categoryFastaFile, "wb")
-          bowtieIndecies.append(BowtieIndexItem(bowtieIndex, category, categoryFastaFile))
-        else:
-          cat.NumberOfGenome = cat.NumberOfGenome + 1
+        cat.NumberOfGenome = cat.NumberOfGenome + 1
 
-      categoryOut = cat.FileHandle
-      
-      localFnaFile = localFileMap[parts[3]]
-      
-      currentCount = currentCount + 1
-      logger.info("Merge %d/%d: %s ..." % (currentCount, totalCount, localFnaFile))
-      with gzip.open(localFnaFile, 'rb') as f:
-        file_content = f.read()
-        categoryOut.write(file_content)
+    categoryOut = cat.FileHandle
+    
+    localFnaFile = localFileMap[gi.UrlFile]
+    
+    currentCount = currentCount + 1
+    logger.info("Merge %d/%d: %s ..." % (currentCount, totalCount, localFnaFile))
+    with gzip.open(localFnaFile, 'rb') as f:
+      file_content = f.read()
+      categoryOut.write(file_content)
       
   for fout in foutMap.values():
     fout.FileHandle.close()
@@ -128,6 +130,36 @@ def combine_category_fasta_file(logger, maxGenomeInFile, localDir, prefix, targe
 
   open(categoryFileDone, 'wt').close()
   return(categoryFile)
+
+def combine_fasta_file(logger, localDir, prefix, targetFile, localFileMap):
+  fasta_file = os.path.join(localDir, prefix + "genomes.fasta")
+  map_file =  os.path.join(localDir, prefix + "genomes.map")
+
+  giItems = readGenomeItems(targetFile)
+  currentCount = 0
+  totalCount = len(giItems)
+  with open(fasta_file, "wb") as fFasta:
+    with open(map_file, "wt") as fMap:
+      fMap.write("Chromosome\tSpecies\tCategory\n")
+      for gi in giItems:
+        category = gi.Category
+        name = gi.Name
+        localFnaFile = localFileMap[gi.UrlFile]
+
+        currentCount = currentCount + 1
+        logger.info("Merge %d/%d: %s ..." % (currentCount, totalCount, localFnaFile))
+        with gzip.open(localFnaFile, 'rb') as f:
+          file_content = f.read()
+          fFasta.write(file_content)
+          with TextIOWrapper(BytesIO(file_content)) as fin:
+            for line in fin:
+              if line.startswith(">"):
+                logger.info(line.rstrip())
+                parts = line.rstrip().split(' ')
+                chrom = parts[0]
+                fMap.write("%s\t%s\t%s\n" % (chrom, name, category))
+          
+  return(fasta_file)
 
 def open_ftp():
   rootDir = ""
@@ -149,15 +181,6 @@ def download_assembly_summary(logger, localDir, prefix, database="genbank"):
       ftp.retrbinary("RETR " + summaryFile, f.write)
 
   return(result)
-
-class GenomeItem :
-  def __init__(self, taxonomyId, accession, name, assemblyLevel, assemblyLevelIndex, urlFile):
-    self.TaxonomyId = taxonomyId
-    self.Accession = accession
-    self.Name = name
-    self.AssemblyLevel = assemblyLevel
-    self.AssemblyLevelIndex = assemblyLevelIndex
-    self.UrlFile = urlFile
 
 def extract_unique_genome_priority(logger, rootFile, idCategoryMap, taxonomyRootId, priorityLevels):
   priorStr = "_".join([s[0:4] for s in priorityLevels])
@@ -185,29 +208,31 @@ def extract_unique_genome_priority(logger, rootFile, idCategoryMap, taxonomyRoot
       if taxidstr not in idCategoryMap:
         continue
 
-      taxid = int(taxidstr)
+      taxonomyId = int(taxidstr)
 
       assemblyLevel = parts[11]
       assemblyLevelIndex = levels.index(assemblyLevel)
 
-      if taxid in idItemMap:
-        if idItemMap[taxid].AssemblyLevelIndex > assemblyLevelIndex:
+      if taxonomyId in idItemMap:
+        if idItemMap[taxonomyId].AssemblyLevelIndex > assemblyLevelIndex:
           continue
 
       accession = parts[0]
       name = parts[7]
       url = parts[19]
+
+      if url == 'na':
+        continue
+        
       folderName = os.path.basename(url)
       fnaFile = url + "/" + folderName + "_genomic.fna.gz"
       urlFile = fnaFile.replace("ftp://ftp.ncbi.nlm.nih.gov", "")
-      idItemMap[taxid] = GenomeItem(taxid, accession, name, assemblyLevel, assemblyLevelIndex, urlFile)
+      category = getCategory(idCategoryMap[taxidstr])
+      
+      idItemMap[taxonomyId] = GenomeItem(category, taxonomyId, accession, name, assemblyLevel, urlFile, assemblyLevelIndex)
 
-  with open(result, "wt") as fout:
-    fout.write("Type\tAccession\tCategory\tFile\tTaxonomyId\tName\n")
-    for taxid in sorted(idItemMap.keys()):
-      gi = idItemMap[taxid]
-      fout.write("%s\t%s\t%s\t%s\t%s\t%s\n" % (gi.AssemblyLevel, gi.Accession, idCategoryMap[str(taxid)], gi.UrlFile, gi.TaxonomyId, gi.Name))
-
+  giItems = [idItemMap[taxid] for taxid in sorted(idItemMap.keys())]
+  writeGenomeItems(result, giItems)
   return(result)
 
 def extract_unique_genome(logger, rootFile, idMap, taxonomyRootId, completeGenomeOnly=False):
@@ -218,6 +243,9 @@ def extract_unique_genome(logger, rootFile, idMap, taxonomyRootId, completeGenom
 
   return(extract_unique_genome_priority(logger, rootFile, idMap, taxonomyRootId, priorityLevels))
 
+def get_done_file(fileName):
+  return(fileName + ".done")
+
 def download_assembly_genomes(logger, genomeRootDir, targetFile):
   logger.info("Checking %s ... " % targetFile)
 
@@ -227,50 +255,42 @@ def download_assembly_genomes(logger, genomeRootDir, targetFile):
     for line in fin:
       totalCount = totalCount + 1
 
-  logger.info("Downloading %d genomes to cache folder %s ..." % (totalCount, genomeRootDir))
-  currentCount = 0
+  giItems = readGenomeItems(targetFile)
+  totalCount = len(giItems)
+  logger.info("Total %d genomes to cache folder %s ..." % (totalCount, genomeRootDir))
   localFileMap = {}
 
-  ftp = None
-  with open(targetFile, "rt") as fin:
-    fin.readline()
-    for line in fin:
-      parts = line.rstrip().split('\t')
+  for gi in giItems:
+    categoryDir = os.path.join(genomeRootDir, gi.Category)
 
-      category = getCategory(parts[2])
-      fnaFile = parts[3]
+    if not os.path.exists(categoryDir):
+      os.mkdir(categoryDir)
 
-      categoryDir = os.path.join(genomeRootDir, category)
+    localFile = os.path.join(categoryDir, os.path.basename(gi.UrlFile))
+    localFileMap[gi.UrlFile] = localFile
 
-      if not os.path.exists(categoryDir):
-        os.mkdir(categoryDir)
+  waitingFileMap = {fnaFile:localFileMap[fnaFile] for fnaFile in localFileMap if not os.path.exists(get_done_file(localFileMap[fnaFile]))}
+  totalCount = len(waitingFileMap)
+  logger.info("Downloading %d genomes to cache folder %s ..." % (totalCount, genomeRootDir))
 
-      currentCount = currentCount + 1
+  if totalCount > 0:
+    with open_ftp() as ftp:
+      currentCount = 0
+      for fnaFile in waitingFileMap.keys():
+        currentCount = currentCount + 1
+        localFile = waitingFileMap[fnaFile]
+        localDoneFile = get_done_file(localFile)
 
-      tmpFile = os.path.join(categoryDir, os.path.basename(fnaFile))
-
-      localFileMap[fnaFile] = tmpFile
-
-      tmpDoneFile = tmpFile + ".done"
-      if os.path.exists(tmpDoneFile):
-        continue
-
-      logger.info("Downloading %d/%d: %s to %s ..." % (currentCount, totalCount, fnaFile, tmpFile))
-      with open(tmpFile, "wb") as f:
-        if ftp == None:
-          ftp = open_ftp()
-        ftp.retrbinary("RETR " + fnaFile, f.write)
-      open(tmpDoneFile, 'wt').close()
-
-  if (ftp != None):
-    ftp.close()
+        logger.info("Downloading %d/%d: %s to %s ..." % (currentCount, totalCount, fnaFile, localFile))
+        with open(localFile, "wb") as f:
+          ftp.retrbinary("RETR " + fnaFile, f.write)
+        open(localDoneFile, 'wt').close()
 
   return(localFileMap)
 
 def prepare_database(logger, taxonomyRootId, outputFolder, maxGenomeInFile, prefix, database="genbank"):
   taxonomyFile = os.path.join(outputFolder, prefix + "taxonomy.txt")
   
-  logger.info("Preparing taxonomy file %s ..." % taxonomyFile)
   prepare_taxonomy(logger, taxonomyFile)
 
   logger.info("Reading taxonomy from %s ..." % taxonomyFile)
@@ -303,6 +323,44 @@ def prepare_database(logger, taxonomyRootId, outputFolder, maxGenomeInFile, pref
   localFileMap = download_assembly_genomes(logger, cacheDir, targetFile)
 
   categoryFile = combine_category_fasta_file(logger, maxGenomeInFile, fastaDir, prefix, targetFile, localFileMap)
+
+  logger.info("Done.")
+
+def prepare_database_as_whole(logger, taxonomyRootId, outputFolder, prefix, database="genbank"):
+  taxonomyFile = os.path.join(outputFolder, prefix + "taxonomy.txt")
+  
+  prepare_taxonomy(logger, taxonomyFile)
+
+  logger.info("Reading taxonomy from %s ..." % taxonomyFile)
+  tree = TaxonomyTree()
+  tree.ReadFromFile(taxonomyFile)
+
+  idMap = tree.BuildChildIdParentNameMap(taxonomyRootId)
+  name = tree.GetItem(taxonomyRootId).Name.replace(" ", "_") + "." + taxonomyRootId
+
+  localDir = os.path.join(outputFolder, name.lower())
+  if not os.path.exists(localDir):
+    os.mkdir(localDir)
+
+  cacheDir = os.path.join(localDir, "cache")
+  if not os.path.exists(cacheDir):
+    os.mkdir(cacheDir)
+
+  fastaDir = os.path.join(localDir, "whole_fasta")
+  if not os.path.exists(fastaDir):
+    os.mkdir(fastaDir)
+
+  rootFile = download_assembly_summary(logger, localDir, prefix, database)
+
+  with open(rootFile + "." + taxonomyRootId + ".idmap", "wt") as fout:
+    for id in idMap:
+      fout.write("%s\t%s\n" % ( id, idMap[id]))
+
+  targetFile = extract_unique_genome(logger, rootFile, idMap, taxonomyRootId, False)
+  
+  localFileMap = download_assembly_genomes(logger, cacheDir, targetFile)
+
+  categoryFile = combine_fasta_file(logger, fastaDir, prefix, targetFile, localFileMap)
 
   logger.info("Done.")
 

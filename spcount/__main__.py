@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 from .__version__ import __version__
-from .database_util import prepare_database, prepare_index
+from .database_util import prepare_database, prepare_database_as_whole, prepare_index
 from .bowtie_util import bowtie, bowtie_fastq2fasta
 from .count_util import count
 
@@ -55,6 +55,13 @@ def main():
   parser_p.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
   parser_p.add_argument('-o', '--outputFolder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
 
+  # create the parser for the "database_whole" command
+  parser_w = subparsers.add_parser('database_whole')
+  parser_w.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
+  parser_w.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
+  parser_w.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
+  parser_w.add_argument('-o', '--outputFolder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
+
   # create the parser for the "index" command
   parser_i = subparsers.add_parser('index')
   parser_i.add_argument('-i', '--input', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
@@ -100,6 +107,21 @@ def main():
     logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database.log"), args)
     print(args)
     prepare_database(logger, args.input, args.outputFolder, args.maxGenomeInFile, args.prefix, database)
+  elif args.command == "database_whole":
+    if DEBUG:
+      #args.input = "2"
+      args.input = "10239"
+      args.outputFolder = "/scratch/cqs_share/references/genbank"
+      args.refseq = False
+
+    if args.prefix == None:
+      now = datetime.now()
+      args.prefix = now.strftime("%Y%m%d_")
+
+    database = "refseq" if args.refseq else "genbank"
+    logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database_as_whole.log"), args)
+    print(args)
+    prepare_database_as_whole(logger, args.input, args.outputFolder, args.prefix, database)
   elif args.command == "index":
     if DEBUG:
       args.input = "/scratch/cqs_share/references/refseq/bacteria/20200321_assembly_summary.txt.files.list"
