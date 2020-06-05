@@ -10,7 +10,7 @@ from _ctypes import ArgumentError
 def readFileMap(fileName):
   result = {}
   with open(fileName, "rt") as fin:
-    fin.readline()
+    #fin.readline()
     for line in fin:
       parts = line.rstrip().split('\t')
       result[parts[1]] = parts[0]
@@ -120,6 +120,9 @@ def count(logger, inputListFile, outputFile, countListFile):
   logger.info("Start count ...")
 
   bowtieFileMap = readFileMap(inputListFile)
+
+  #print(bowtieFileMap)
+
   countFileMap = readFileMap(countListFile) if countListFile != None else {}
 
   # icount = 0
@@ -144,18 +147,21 @@ def count(logger, inputListFile, outputFile, countListFile):
 
     if sample in countFileMap:
       countFile = countFileMap[sample]
-      logger.info("filling count from %s ..." % countFile)
       fillQueryCount(logger, queryMap, countFile)
 
-    assignCount(logger, queryMap, bowtieItems)
+    assignCount(queryMap, bowtieItems)
 
-    finalItems.extends(bowtieItems)
+    finalItems.extend(bowtieItems)
 
   samples = sorted(list(set([bi.Sample for bi in finalItems])))
 
   categorySet = list(set([bi.Category for bi in finalItems]))
+
+  finalMap = {sample:{category:0 for category in categorySet} for sample in samples}
+  for bi in finalItems:
+    finalMap[bi.Sample][bi.Category] += bi.Count
   
-  catCount = [[cat, sum(v[cat].TotalCount for v in finalMap.values() if cat in v)] for cat in categorySet]
+  catCount = [[cat, sum(v[cat] for v in finalMap.values())] for cat in categorySet]
   catCount.sort(key=lambda r:-r[1])
 
   categories = list(cat[0] for cat in catCount)
@@ -168,7 +174,7 @@ def count(logger, inputListFile, outputFile, countListFile):
       for sample in samples:
         catMap = finalMap[sample]
         if catName in catMap:
-          fout.write("\t%.2lf" % finalMap[sample][catName].TotalCount)
+          fout.write("\t%.2lf" % finalMap[sample][catName])
         else:
           fout.write("\t0")
       fout.write("\n")
