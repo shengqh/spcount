@@ -104,7 +104,7 @@ def main():
       args.prefix = now.strftime("%Y%m%d_")
 
     database = "refseq" if args.refseq else "genbank"
-    logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database.log"), args)
+    logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + ".log"), args)
     print(args)
     prepare_database(logger, args.input, args.outputFolder, args.maxGenomeInFile, args.prefix, database)
   elif args.command == "database_whole":
@@ -119,14 +119,14 @@ def main():
       args.prefix = now.strftime("%Y%m%d_")
 
     database = "refseq" if args.refseq else "genbank"
-    logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + "_spcount_database_as_whole.log"), args)
+    logger = initialize_logger(os.path.join(args.outputFolder, args.prefix + ".log"), args)
     print(args)
     prepare_database_as_whole(logger, args.input, args.outputFolder, args.prefix, database)
   elif args.command == "index":
     if DEBUG:
       args.input = "/scratch/cqs_share/references/refseq/bacteria/20200321_assembly_summary.txt.files.list"
       args.thread = 8
-    logger = initialize_logger(args.input + "_spcount_index.log", args)
+    logger = initialize_logger(args.input + ".log", args)
     print(args)
     prepare_index(logger, args.input, args.thread, args.force, args.slurm, args.slurmEmail)
   elif args.command == "bowtie":
@@ -137,10 +137,10 @@ def main():
       args.output = "/scratch/cqs/kasey_vickers_projects/testdata/VLDL_WZ.txt"
     print(args)
     if args.fastq2fasta:
-      logger = initialize_logger(args.outputPrefix + "_spcount_bowtie_fastq2fasta.log", args)
+      logger = initialize_logger(args.outputPrefix + ".log", args)
       bowtie_fastq2fasta(logger, args.input, args.outputPrefix, args.databaseListFile, args.thread)
     else:
-      logger = initialize_logger(args.output + "_spcount_bowtie.log", args)
+      logger = initialize_logger(args.output + ".spcount.log", args)
       bowtie(logger, args.input, args.output, args.databaseListFile, args.thread)
   elif args.command == "count":
     if DEBUG:
@@ -148,7 +148,7 @@ def main():
       args.countFile = "/scratch/cqs/kasey_vickers_projects/testdata/VLDL_WZ_clipped_identical.unmapped.fastq.dupcount"
       args.output = "/scratch/cqs/kasey_vickers_projects/testdata/VLDL_WZ_bacteria.count"
     print(args)
-    logger = initialize_logger(args.output + "_spcount_count.log", args)
+    logger = initialize_logger(args.output + ".log", args)
     count(logger, args.input, args.output, args.countFile)
   
 if __name__ == "__main__":
