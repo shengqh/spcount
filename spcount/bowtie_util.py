@@ -49,7 +49,7 @@ def bowtie(logger, inputFile, outputFile, databaseListFile, thread, isFasta=Fals
             for line in fin:
               parts = line.rstrip().split('\t')
               fout.write("%s\t%s\t%s\t%s\t%s\n" % (parts[0].split(' ')[0], parts[1], parts[2], parts[3], category))
-
+          #break
           os.remove(outfile)
           
           if bowtieCount > 1:
