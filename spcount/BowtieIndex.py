@@ -18,4 +18,4 @@ def writeBowtieIndexList(fileName, bowtieIndecies):
     fout.write("BowtieIndex\tCategory\tFasta\n")
     for bowtieIndex in bowtieIndecies:
       fout.write("%s\t%s\t%s\n" % (bowtieIndex.Index, bowtieIndex.Category, bowtieIndex.Fasta))
-
+  
