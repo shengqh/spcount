@@ -29,7 +29,7 @@ def prepare_taxonomy(logger, outputFile):
   if os.path.exists(outputFile):
     return
 
-  logger.info("Preparing taxonomy file %s ..." % taxonomyFile)
+  logger.info("Preparing taxonomy file %s ..." % outputFile)
 
   #download taxonomy from ncbi
   url="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
@@ -192,7 +192,6 @@ def extract_unique_genome_priority(logger, rootFile, idCategoryMap, taxonomyRoot
   idItemMap = {}
   logger.info("Reading %s ..." % rootFile)
   with open(rootFile, "rt") as fin:
-    count = 0
     for line in fin:
       if line.startswith('#'):
         continue
@@ -248,12 +247,6 @@ def get_done_file(fileName):
 
 def download_assembly_genomes(logger, genomeRootDir, targetFile):
   logger.info("Checking %s ... " % targetFile)
-
-  totalCount = 0
-  with open(targetFile, "rt") as fin:
-    fin.readline()
-    for line in fin:
-      totalCount = totalCount + 1
 
   giItems = readGenomeItems(targetFile)
   totalCount = len(giItems)
@@ -372,7 +365,7 @@ def prepare_index(logger, categoryFile, thread, force=False, slurm=False, slurmE
       logger.info("Building index for %s ..." % bowtieIndex.Fasta)
       indexDone = bowtieIndex.Index + ".index.done"
       if not os.path.exists(indexDone) or force:
-        subprocess.call(['bowtie-build', '-q', '--threads', str(thread), bowtieIndex.Fasta, bowtieIndex.Index])
+        subprocess.call(['bowtie-build', '-q', '-r', '--threads', str(thread), bowtieIndex.Fasta, bowtieIndex.Index])
         open(indexDone, 'wt').close()
     return
 
@@ -380,12 +373,12 @@ def prepare_index(logger, categoryFile, thread, force=False, slurm=False, slurmE
     slurmTemplate = os.path.join(os.path.dirname(os.path.realpath(__file__)), "slurm.template")
 
   if not os.path.exists(slurmTemplate):
-    raise ArgumentError("Slurm template not exists: %s" % slurmTemplate)
+    raise Exception("Slurm template not exists: %s" % slurmTemplate)
 
   with open(slurmTemplate, "rt") as fin:
     slurmLines = [line.rstrip() for line in fin]
 
-  slurmFolder = os.path.join(os.path.dirname(categoryFile), "slurm")
+  slurmFolder = os.path.join(os.path.dirname(os.path.abspath(categoryFile)), "slurm")
   if not os.path.exists(slurmFolder):
     os.mkdir(slurmFolder)
 
@@ -393,7 +386,16 @@ def prepare_index(logger, categoryFile, thread, force=False, slurm=False, slurmE
   with open(submitFile, "wt") as fout:
     for bowtieIndex in bowtieIndecies:
       indexDone = bowtieIndex.Index + ".index.done"
-      command = "bowtie-build -q --threads %s %s %s\necho '' > %s\n" % (thread, bowtieIndex.Fasta, bowtieIndex.Index, indexDone )
+
+      if bowtieIndex.Fasta.endswith(".gz"):
+        unzip_file = bowtieIndex.Fasta[:-3]
+        command = "gzip -c " + bowtieIndex.Fasta + ">" + unzip_file + "\n"
+      else:
+        command = ""
+        unzip_file = bowtieIndex.Fasta
+      command = command + "bowtie-build -q -r --threads %s %s %s\necho '' > %s\n" % (thread, unzip_file, bowtieIndex.Index, indexDone )
+      if bowtieIndex.Fasta.endswith(".gz"):
+        command = command + "\nrm " + unzip_file + "\n"
 
       slurmFile = os.path.join(slurmFolder, os.path.basename(bowtieIndex.Index + ".slurm"))
       with open(slurmFile, "wt") as fslurm:
@@ -416,6 +418,49 @@ def prepare_index(logger, categoryFile, thread, force=False, slurm=False, slurmE
 
   logger.info("Please submit job using %s" % submitFile)
   return
+
+def fastq_to_database(logger, fastq_file, sample_name, output_file, reads_per_file, gzipped=False):
+  output_folder = os.path.dirname(os.path.abspath(output_file))
+  fastaDir = os.path.join(output_folder, "fasta")
+  if not os.path.exists(fastaDir):
+    os.mkdir(fastaDir)
+
+  file_index = 0
+  with open(output_file, "wt") as flist:
+    flist.write("BowtieIndex\tCategory\tFasta\n")
+    reads_count = 0
+    fout = None
+    fastq_files = fastq_file.split(",")
+    for fq in fastq_files:
+      fin = gzip.open(fq, "rt") if fq.endswith(".gz") else open(fq, "rt")
+      with fin:
+        while True:
+          query = fin.readline()
+          if not query:
+            break
+
+          if (reads_count % reads_per_file) == 0:
+            if fout != None:
+              fout.close()
+            file_index += 1
+            bowtie_index = os.path.join(fastaDir, "%s.%d" % ( sample_name, file_index ))
+            if gzipped:
+              cur_file = bowtie_index + ".fasta.gz"
+              fout = gzip.open(cur_file, "wt")
+            else:
+              cur_file = bowtie_index + ".fasta"
+              fout = open(cur_file, "wt")
+
+            flist.write("%s\t%s\t%s\n" % (bowtie_index, sample_name, cur_file ))
+            logger.info("Writing to %s ..." % os.path.basename(cur_file))
+          
+          reads_count += 1
+
+          sequence = fin.readline().rstrip()
+          fin.readline()
+          fin.readline()
+          fout.write(">%d\n%s\n" %(reads_count, sequence))
+    fout.close()
 
 if __name__ == "__main__":
   logger = logging.getLogger('database')
