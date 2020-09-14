@@ -69,32 +69,33 @@ def main():
   parser_fastq_to_database.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
 
   # create the parser for the "index" command
-  parser_i = subparsers.add_parser('index')
-  parser_i.add_argument('-i', '--input', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
-  parser_i.add_argument('-t', '--thread', action='store', type=int, default=8, nargs='?', help="Thread number")
-  parser_i.add_argument('-f', '--force', action='store_true', default=False, help="Ignore existing index file and regenerate all")
-  parser_i.add_argument('-s', '--slurm', action='store_true', default=False, help="Generate slurm scripts")
-  parser_i.add_argument('-e', '--slurm_email', action='store', help="Email for slurm status")
+  parser_index = subparsers.add_parser('index')
+  parser_index.add_argument('-i', '--input', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
+  parser_index.add_argument('-t', '--thread', action='store', type=int, default=8, nargs='?', help="Thread number")
+  parser_index.add_argument('-f', '--force', action='store_true', default=False, help="Ignore existing index file and regenerate all")
+  parser_index.add_argument('-s', '--slurm', action='store_true', default=False, help="Generate slurm scripts")
+  parser_index.add_argument('-e', '--slurm_email', action='store', help="Email for slurm status")
 
   # create the parser for the "bowtie" command
-  parser_s = subparsers.add_parser('bowtie')
-  parser_s.add_argument('-i', '--input', action='store', nargs='?', help='Input single-end fastq/fasta file', required=NOT_DEBUG)
-  parser_s.add_argument('-d', '--databaseListFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
-  parser_s.add_argument('-t', '--thread', action='store', nargs='?', type=int, default=8, help="Thread number")
-  parser_s.add_argument('--fastq2fasta', action='store_true', default=False, help="Convert fastq to fasta format for bowtie")
-  parser_s.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output file", required=NOT_DEBUG)
+  parser_bowtie = subparsers.add_parser('bowtie')
+  parser_bowtie.add_argument('-i', '--input', action='store', nargs='?', help='Input single-end fastq/fasta file', required=NOT_DEBUG)
+  parser_bowtie.add_argument('-d', '--databaseListFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
+  parser_bowtie.add_argument('-t', '--thread', action='store', nargs='?', type=int, default=8, help="Thread number")
+  parser_bowtie.add_argument('--fastq2fasta', action='store_true', default=False, help="Convert fastq to fasta format for bowtie")
+  parser_bowtie.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output file", required=NOT_DEBUG)
 
   # create the parser for the "count" command
-  parser_c = subparsers.add_parser('count')
-  parser_c.add_argument('-i', '--input', action='store', nargs='?', help='Input bowtie result list file', required=NOT_DEBUG)
-  parser_c.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
-  parser_c.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output count file", required=NOT_DEBUG)
+  parser_count = subparsers.add_parser('count')
+  parser_count.add_argument('-i', '--input', action='store', nargs='?', help='Input bowtie result list file', required=NOT_DEBUG)
+  parser_count.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
+  parser_count.add_argument('--category_name', action='store', nargs='?', help="Input category name and ignore the one in bowtie result file")
+  parser_count.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output count file", required=NOT_DEBUG)
   
-  parser_c = subparsers.add_parser('sequential_count')
-  parser_c.add_argument('-i', '--input', action='store', nargs='?', help='Input fastq list file', required=NOT_DEBUG)
-  parser_c.add_argument('-d', '--dbFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
-  parser_c.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
-  parser_c.add_argument('-o', '--output', action='store', nargs='?', help="Output count file", required=NOT_DEBUG)
+  parser_sequential_count = subparsers.add_parser('sequential_count')
+  parser_sequential_count.add_argument('-i', '--input', action='store', nargs='?', help='Input fastq list file', required=NOT_DEBUG)
+  parser_sequential_count.add_argument('-d', '--dbFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
+  parser_sequential_count.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
+  parser_sequential_count.add_argument('-o', '--output', action='store', nargs='?', help="Output count file", required=NOT_DEBUG)
   
   
   if not DEBUG and len(sys.argv)==1:
@@ -173,7 +174,7 @@ def main():
       args.output = "/scratch/cqs/kasey_vickers_projects/testdata/VLDL_WZ_bacteria.count"
     print(args)
     logger = initialize_logger(args.output + ".log", args)
-    count(logger, args.input, args.output, args.countFile)
+    count(logger, args.input, args.output, args.countFile, args.category_name)
   elif args.command == "sequential_count":
     logger = initialize_logger(args.output + ".log", args)
     sequential_count(logger, args.input, args.dbFile, args.output, args.countFile)

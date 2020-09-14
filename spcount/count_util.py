@@ -54,7 +54,7 @@ def fillQueryCount(logger, queryMap, countFile):
         item.Count = count
         item.Sequence = sequence  
 
-def count(logger, inputListFile, outputFile, countListFile):
+def count(logger, inputListFile, outputFile, countListFile, category_name=None):
   logger.info("Start count ...")
 
   bowtieFileMap = readFileMap(inputListFile)
@@ -88,6 +88,10 @@ def count(logger, inputListFile, outputFile, countListFile):
 
   samples = sorted(list(set([bi.Sample for bi in finalItems])))
 
+  if category_name != None:
+    for bi in finalItems:
+      bi.Category = category_name
+
   categorySet = list(set([bi.Category for bi in finalItems]))
 
   finalMap = {sample:{category:0 for category in categorySet} for sample in samples}
@@ -97,7 +101,7 @@ def count(logger, inputListFile, outputFile, countListFile):
   catCount = [[cat, sum(v[cat] for v in finalMap.values())] for cat in categorySet]
   catCount.sort(key=lambda r:-r[1])
 
-  categories = list(cat[0] for cat in catCount)
+  categories = sorted(list(cat[0] for cat in catCount))
   
   logger.info("Writing to %s" % outputFile)
   with open(outputFile, "wt") as fout:
