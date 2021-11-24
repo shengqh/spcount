@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 
 from .__version__ import __version__
+from .taxonomy_util import prepare_taxonomy
 from .database_util import prepare_database, prepare_database_as_whole, prepare_index, fastq_to_database
 from .bowtie_util import bowtie, bowtie_fastq2fasta
 from .count_util import count
@@ -47,7 +48,17 @@ def main():
   
   subparsers = parser.add_subparsers(dest="command")
 
-  # create the parser for the "database" command
+  # create the parser for the "category" command
+  parser_t = subparsers.add_parser('taxonomy')
+  parser_t.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
+
+  parser_c = subparsers.add_parser('category')
+  parser_c.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
+  parser_c.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
+  parser_c.add_argument('--maximum_genome_in_file', action='store',  type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
+  parser_c.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
+  parser_c.add_argument('-o', '--output_folder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
+
   parser_p = subparsers.add_parser('database')
   parser_p.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
   parser_p.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
@@ -105,7 +116,11 @@ def main():
   args = parser.parse_args()
   #args.command = "database"
   
-  if args.command == "database":
+  if args.command == "taxonomy":
+    logger = initialize_logger(args.output + ".log", args)
+    print(args)
+    prepare_taxonomy(logger, args.output)
+  elif args.command == "database":
     if DEBUG:
       #args.input = "2"
       args.input = "10239"

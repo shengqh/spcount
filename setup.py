@@ -22,7 +22,7 @@ def find_version(*file_paths):
 
 PKG = "spcount"
 
-version = find_version("spcount/__version__.py")
+version = find_version("src/spcount/__version__.py")
 
 setuptools.setup(
     name=PKG,
@@ -34,19 +34,23 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/shengqh/spcount",
     download_url="https://github.com/shengqh/spcount/archive/v" + version + ".tar.gz",
-    entry_points = {
-        'console_scripts': ['spcount=spcount.__main__:main'],
-    },
-    packages=setuptools.find_packages(exclude=["tests", "tests.*", "scripts"]),
-    package_data={'': ['spcount/slurm.template']},
-    install_requires=['argparse' ],
+    project_urls={
+        "Bug Tracker": "https://github.com/shengqh/spcount/issues",
+    },    
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    package_dir={"": "src"},
+    packages=setuptools.find_packages(where="src", exclude=["tests", "tests.*", "scripts"]),
+    python_requires='>=3.6',
+    entry_points = {
+        'console_scripts': ['spcount=spcount.__main__:main'],
+    },
+    package_data={'': ['src/spcount/slurm.template']},
+    install_requires=['argparse' ],
     include_package_data=True,
     zip_safe=False,
-    python_requires='>=3.6',
 )
 

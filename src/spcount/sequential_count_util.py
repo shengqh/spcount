@@ -7,8 +7,8 @@ import math
 import subprocess
 from _ctypes import ArgumentError
 
-from .common_util import readFileMap
-from .BowtieCountItem import BowtieCountItem, readBowtieTextFile
+from common_util import readFileMap
+from BowtieCountItem import BowtieCountItem, readBowtieTextFile
 
 def prepare_bowtie_index(logger, sequence, thread):
 
