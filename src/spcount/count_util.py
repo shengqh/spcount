@@ -1,15 +1,12 @@
-import argparse
-import sys
-import logging
-import os
 import gzip
-import math
-import subprocess
-from _ctypes import ArgumentError
+import re
+import pickle
 
 from .CategoryEntry import CategoryEntry
 from .common_util import readFileMap
-from .BowtieCountItem import BowtieCountItem, readBowtieTextFile, getQueryMap, getCategoryMap, getCategoryUniqueCountMap, assignCount, getCategoryCountMap
+from .BowtieCountItem import BowtieCountItem, readBowtieTextFile, getQueryMap, assignCount
+from .Species import Species
+from .Query import Query
 
 def removeSubset(logger, catMap):
   catItems = [v for v in catMap.values()]
@@ -53,6 +50,229 @@ def fillQueryCount(logger, queryMap, countFile):
       for item in items:
         item.Count = count
         item.Sequence = sequence  
+
+def bowtie_count(logger, input_list_file, output_file, count_file, species_file, species_column='species'):
+  logger.info(f"reading count file {count_file}")
+  count_map={}
+  with open(count_file, "rt") as fin:
+    fin.readline()
+    for line in fin:
+      parts=line.split('\t')
+      count_map[parts[0]] = parts[1]
+
+  logger.info(f"reading species file {species_file}")
+  species_map={}
+  with open(species_file, "rt") as fin:
+    line = fin.readline()
+    headers = line.rstrip().split('\t')
+    species_index = headers.index(species_column)
+    for line in fin:
+      parts = line.rstrip().split('\t')
+      species_map[parts[0]] = parts[species_index]
+
+  read_map = {}
+  with open(input_list_file, "rt") as fl:
+    for line in fl:
+      parts = re.split('\s+', line.rstrip())
+      bowtie_file = parts[0]
+      logger.info(f"parsing {bowtie_file}")
+      with gzip.open(bowtie_file, "rt") as fin:
+        for bl in fin:
+          bparts = bl.split('\t')
+          query = bparts[0].split(' ')[0]
+          species = species_map[bparts[2]]
+          read_map.setdefault(query,set()).add(species)
+
+  logger.info(f"merge all bowtie result ...")
+  all_queries = [[query, int(count_map[query]), ",".join(read_map[query])] for query in read_map.keys()]   
+  all_queries.sort(key=lambda x:x[1], reverse=True)
+
+  logger.info(f"output to {output_file} ...")
+  with gzip.open(output_file, "wt") as fout:
+    fout.write("read\tcount\tspecies\n")
+    for query in all_queries:
+      fout.write(f"{query[0]}\t{query[1]}\t{query[2]}\n")
+
+  logger.info("done")
+
+def count_table(logger, input_list_file, output_prefix, species_file, species_column='species'):
+
+  logger.info("reading species taxonomy map from " + species_file + "...")
+  species_taxonomy_map = {}
+  with open(species_file, "rt") as fin:
+    fin.readline()
+    for line in fin:
+      parts = line.rstrip().split('\t')
+      if parts[12] not in species_taxonomy_map:
+        species_taxonomy_map[parts[12]] = {
+          'genus':parts[11],
+          'family':parts[10],
+          'order':parts[9],
+          'class':parts[8],
+          'phylum':parts[7],
+          'superkingdom':parts[5],
+      }
+
+  query_list = []
+  species_map = {}
+  samples=[]
+  with open(input_list_file, "rt") as fl:
+    for line in fl:
+      parts = line.rstrip().split('\t')
+      count_file = parts[0]
+      sample=parts[1]
+      samples.append(sample)
+      logger.info(f"parsing {count_file}")
+      with gzip.open(count_file, "rt") as fin:
+        fin.readline()
+        for bl in fin:
+          bparts = bl.split('\t')
+          query_name = bparts[0].split(' ')[0]
+          count = int(bparts[1])
+          species_list = bparts[2].rstrip().split(',')
+          query = Query(query_name, count, species_list)
+          query_list.append(query)
+          for species in species_list:
+            if species not in species_map:
+              species_map[species] = Species(species)
+            species_map[species].add_auery(sample, query)
+
+  species_list = [v for v in species_map.values()]
+  species_map.clear()
+
+  for sv in species_list:
+    sv.sum_query_count()
+
+  species_list.sort(key=lambda x:x.query_count, reverse=True)
+
+  # myobj={ "species_taxonomy_map":species_taxonomy_map, 
+  #         "species_list": species_list,
+  #         "samples": samples,
+  #         "query_list": query_list }
+
+  # with open(output_prefix + '.pickle', 'wb') as handle:
+  #   pickle.dump(myobj, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+  logger.info("merge identical")
+  for sv in species_list:
+    sv.is_identical = False
+    sv.identical_species = []
+
+  for i1 in range(0, len(species_list)-1):
+    if species_list[i1].is_identical:
+      continue
+    if i1 % 100 == 0:
+      logger.info(f"checking identical: {i1+1} / {len(species_list)}")
+    for i2 in range(i1+1, len(species_list)):
+      if species_list[i2].is_identical:
+        continue
+      if species_list[i1].query_count != species_list[i2].query_count:
+        break
+      if species_list[i1].queries_set == species_list[i2].queries_set:
+        species_list[i2].is_identical = True
+        species_list[i1].identical_species.append(species_list[i2])
+
+  old_len = len(species_list)
+  new_len = len([sv for sv in species_list if not sv.is_identical])
+  logger.info(f"{old_len - new_len} identical species were found")
+
+  for i1 in range(0, len(species_list)-1):
+    if species_list[i1].is_subset or species_list[i1].is_identical:
+      continue
+    if i1 % 100 == 0:
+      logger.info(f"checking subset: {i1+1} / {len(species_list)}")
+    for i2 in range(i1+1, len(species_list)):
+      if species_list[i2].is_subset or species_list[i1].is_identical:
+        continue
+      if species_list[i1].contains(species_list[i2]):
+        species_list[i2].is_subset = True
+
+  #remove subset species from query 
+  for species in species_list:
+    if species.is_subset:
+      all_names = [species.name] + species.identical_species
+      for qlist in species.queries.values():
+        for q in qlist:
+          q.remove_species(all_names)
+
+  old_len = len(species_list)
+  species_list = [sv for sv in species_list if not sv.is_subset]
+  new_len = len(species_list)
+  logger.info(f"{old_len - new_len} subset were removed")
+
+  with open(output_prefix + ".species.query.count", "wt") as fout:
+    fout.write("Feature\t" + "\t".join(samples) + "\n")
+    for species in species_list:
+      if species.is_identical:
+        continue
+      species_name = species.name
+      if len(species.identical_species) > 0:
+        species_name = species_name + "," + ",".join([s.name for s in species.identical_species])
+      countstr = "\t".join(str(species.sample_query_count[sample]) if sample in species.sample_query_count else "0" for sample in samples)
+      fout.write(f"{species_name}\t{countstr}\n")
+
+  for query in query_list:
+    query.estimate_count()
+
+  for species in species_list:
+    species.sum_estimated_count()
+
+  with open(output_prefix + ".species.estimated.count", "wt") as fout:
+    fout.write("Feature\t" + "\t".join(samples) + "\n")
+    for species in species_list:
+      if species.is_identical:
+        continue
+
+      species_name = species.name
+      if len(species.identical_species) > 0:
+        species_name = species_name + "," + ",".join([s.name for s in species.identical_species])
+      countstr = "\t".join("{:.2f}".format(species.sample_estimated_count[sample]) if sample in species.sample_estimated_count else "0" for sample in samples)
+      fout.write(f"{species_name}\t{countstr}\n")
+
+  levels = [ 'genus', 'family', 'order', 'class', 'phylum']
+  for level in levels:
+    logger.info("output " + level)
+    cat_map = {}
+    for species in species_list:
+      cat_name = species_taxonomy_map[species.name][level]
+      #print(species.name + ": " + cat_name)
+      if cat_name not in cat_map:
+        cat_map[cat_name] = Species(cat_name)
+      cat_map[cat_name].identical_species.append(species)
+    
+    cats = [cat for cat in cat_map.values()]
+    for cat in cats:
+      cat.sample_query_count = {}
+      for sample in samples:
+        squeries_set = set()
+        for species in cat.identical_species:
+          if sample in species.queries:
+            for query in species.queries[sample]:
+              squeries_set.add(query)
+        scount = sum([query.count for query in squeries_set])
+        cat.sample_query_count[sample] = scount
+      cat.query_count = sum([v for v in cat.sample_query_count.values()])
+
+      cat.estimated_count = sum([species.estimated_count for species in cat.identical_species])
+      cat.sample_estimated_count = {sample: sum([species.sample_estimated_count[sample] if sample in species.sample_estimated_count else 0 for species in cat.identical_species]) for sample in samples}
+      
+    cats.sort(key=lambda x:x.query_count, reverse=True)
+
+    with open(output_prefix + "." + level + ".query.count", "wt") as fout:
+      fout.write("Feature\t" + "\t".join(samples) + "\n")
+      for species in cats:
+        species_name = species.name
+        countstr = "\t".join(str(species.sample_query_count[sample]) if sample in species.sample_query_count else "0" for sample in samples)
+        fout.write(f"{species_name}\t{countstr}\n")
+
+    with open(output_prefix + "." + level + ".estimated.count", "wt") as fout:
+      fout.write("Feature\t" + "\t".join(samples) + "\n")
+      for species in cats:
+        species_name = species.name
+        countstr = "\t".join("{:.2f}".format(species.sample_estimated_count[sample]) if sample in species.sample_estimated_count else "0" for sample in samples)
+        fout.write(f"{species_name}\t{countstr}\n")
+
+  logger.info("done")
 
 def count(logger, inputListFile, outputFile, countListFile, category_name=None):
   logger.info("Start count ...")

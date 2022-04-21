@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --mail-user=__EMAIL__
+#SBATCH --mail-user=quanhu.sheng.1@vumc.org
 #SBATCH --mail-type=FAIL
 #SBATCH --nodes=1
 #SBATCH --ntasks=__THREAD__

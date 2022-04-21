@@ -49,7 +49,7 @@ setuptools.setup(
         'console_scripts': ['spcount=spcount.__main__:main'],
     },
     package_data={'': ['src/spcount/slurm.template']},
-    install_requires=['argparse' ],
+    install_requires=['argparse', 'pandas' ],
     include_package_data=True,
     zip_safe=False,
 )

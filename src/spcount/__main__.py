@@ -6,9 +6,9 @@ from datetime import datetime
 
 from .__version__ import __version__
 from .taxonomy_util import prepare_taxonomy
-from .database_util import prepare_database, prepare_database_as_whole, prepare_index, fastq_to_database
+from .database_util import download_assembly_summary, prepare_segment_database, prepare_index, fastq_to_database
 from .bowtie_util import bowtie, bowtie_fastq2fasta
-from .count_util import count
+from .count_util import bowtie_count, count_table
 
 def initialize_logger(logfile, args):
   logger = logging.getLogger('spcount')
@@ -48,65 +48,68 @@ def main():
   
   subparsers = parser.add_subparsers(dest="command")
 
-  # create the parser for the "category" command
-  parser_t = subparsers.add_parser('taxonomy')
+  parser_t = subparsers.add_parser('dl_taxonomy')
   parser_t.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
 
-  parser_c = subparsers.add_parser('category')
-  parser_c.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
-  parser_c.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
-  parser_c.add_argument('--maximum_genome_in_file', action='store',  type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
-  parser_c.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
-  parser_c.add_argument('-o', '--output_folder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
+  parser_s = subparsers.add_parser('dl_assembly_summary')
+  parser_s.add_argument('-d', '--database', action='store', default="genbank", help='Input database (genbank or refseq, default is genbank database)')
+  parser_s.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
 
-  parser_p = subparsers.add_parser('database')
-  parser_p.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
-  parser_p.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
-  parser_p.add_argument('--maximum_genome_in_file', action='store',  type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
-  parser_p.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
-  parser_p.add_argument('-o', '--output_folder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
-
-  # create the parser for the "database_whole" command
-  parser_w = subparsers.add_parser('database_whole')
-  parser_w.add_argument('-i', '--input', action='store', nargs='?', help='Input root taxonomy id (2 for bacteria)', required=NOT_DEBUG)
-  parser_w.add_argument('--refseq', action='store_true', help='Use refseq database (default is genbank database)')
-  parser_w.add_argument('--prefix', action='store', nargs='?', help='Input prefix of database (default will be date)')
-  parser_w.add_argument('-o', '--output_folder', action='store', nargs='?', help="Output folder", required=NOT_DEBUG)
-
-  parser_fastq_to_database = subparsers.add_parser('fastq_to_database')
-  parser_fastq_to_database.add_argument('-i', '--input', action='store', nargs='?', help='Input FASTQ file', required=NOT_DEBUG)
-  parser_fastq_to_database.add_argument('--sample_name', action='store', nargs='?', help='Input sample name', required=NOT_DEBUG)
-  parser_fastq_to_database.add_argument('--reads_per_file', action='store',  type=int, default=5000000, nargs='?', help='Input number of reads in each database file')
-  parser_fastq_to_database.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
+  parser_segment = subparsers.add_parser('dl_genome')
+  parser_segment.add_argument('-i', '--taxonomy_id', action='store', type=int, default=2, nargs='?', required=NOT_DEBUG, help='Input taxonomy id (for example, 2 for bacteria)')
+  parser_segment.add_argument('-t', '--taxonomy_file', action='store', nargs='?', required=NOT_DEBUG, help='Input taxonomy file')
+  parser_segment.add_argument('-a', '--assembly_summary_file', action='store', nargs='?', required=NOT_DEBUG, help='Input assembly summary file')
+  parser_segment.add_argument('-n', '--maximum_genome_in_file', action='store', type=int, default=500, nargs='?', required=NOT_DEBUG, help='Input number of genome in each output file (default:500)')
+  parser_segment.add_argument('-p', '--prefix', action='store', nargs='?', required=NOT_DEBUG, help='Input prefix of database')
+  parser_segment.add_argument('-r', '--reference_representative_only', action='store_true', required=NOT_DEBUG, help='Use reference or representative genome only')
+  parser_segment.add_argument('-o', '--output_folder', action='store', nargs='?', required=NOT_DEBUG, help="Output folder")
 
   # create the parser for the "index" command
-  parser_index = subparsers.add_parser('index')
+  parser_index = subparsers.add_parser('bowtie_index')
   parser_index.add_argument('-i', '--input', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
   parser_index.add_argument('-t', '--thread', action='store', type=int, default=8, nargs='?', help="Thread number")
   parser_index.add_argument('-f', '--force', action='store_true', default=False, help="Ignore existing index file and regenerate all")
-  parser_index.add_argument('-s', '--slurm', action='store_true', default=False, help="Generate slurm scripts")
-  parser_index.add_argument('-e', '--slurm_email', action='store', help="Email for slurm status")
+  parser_index.add_argument('-s', '--slurm_template', action='store', default=False, help="Input slurm template")
 
-  # create the parser for the "bowtie" command
-  parser_bowtie = subparsers.add_parser('bowtie')
-  parser_bowtie.add_argument('-i', '--input', action='store', nargs='?', help='Input single-end fastq/fasta file', required=NOT_DEBUG)
-  parser_bowtie.add_argument('-d', '--databaseListFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
-  parser_bowtie.add_argument('-t', '--thread', action='store', nargs='?', type=int, default=8, help="Thread number")
-  parser_bowtie.add_argument('--fastq2fasta', action='store_true', default=False, help="Convert fastq to fasta format for bowtie")
-  parser_bowtie.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output file", required=NOT_DEBUG)
+  parser_count = subparsers.add_parser('bowtie_count')
+  parser_count.add_argument('-i', '--input', action='store', nargs='?', help='Input BAM list file', required=NOT_DEBUG)
+  parser_count.add_argument('-c', '--count', action='store', nargs='?', help='Input count file', required=NOT_DEBUG)
+  parser_count.add_argument('-s', '--species', action='store', nargs='?', help='Input species file', required=NOT_DEBUG)
+  parser_count.add_argument('-t', '--species_column', action='store', default="species", nargs='?', help='Input species column')
+  parser_count.add_argument('-o', '--output', action='store', nargs='?', help="Output summary file", required=NOT_DEBUG)
 
-  # create the parser for the "count" command
-  parser_count = subparsers.add_parser('count')
-  parser_count.add_argument('-i', '--input', action='store', nargs='?', help='Input bowtie result list file', required=NOT_DEBUG)
-  parser_count.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
-  parser_count.add_argument('--category_name', action='store', nargs='?', help="Input category name and ignore the one in bowtie result file")
-  parser_count.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output count file", required=NOT_DEBUG)
+  parser_table = subparsers.add_parser('count_table')
+  parser_table.add_argument('-i', '--input', action='store', nargs='?', help='Input count list file', required=NOT_DEBUG)
+  parser_table.add_argument('-s', '--species', action='store', nargs='?', help='Input species file', required=NOT_DEBUG)
+  parser_table.add_argument('-t', '--species_column', action='store', default="species", nargs='?', help='Input species column')
+  parser_table.add_argument('-o', '--output_prefix', action='store', nargs='?', help="Output prefix", required=NOT_DEBUG)
+
+  # parser_fastq_to_database = subparsers.add_parser('fastq_to_database')
+  # parser_fastq_to_database.add_argument('-i', '--input', action='store', nargs='?', help='Input FASTQ file', required=NOT_DEBUG)
+  # parser_fastq_to_database.add_argument('--sample_name', action='store', nargs='?', help='Input sample name', required=NOT_DEBUG)
+  # parser_fastq_to_database.add_argument('--reads_per_file', action='store',  type=int, default=5000000, nargs='?', help='Input number of reads in each database file')
+  # parser_fastq_to_database.add_argument('-o', '--output', action='store', nargs='?', help="Output file", required=NOT_DEBUG)
+
+  # # create the parser for the "bowtie" command
+  # parser_bowtie = subparsers.add_parser('bowtie')
+  # parser_bowtie.add_argument('-i', '--input', action='store', nargs='?', help='Input single-end fastq/fasta file', required=NOT_DEBUG)
+  # parser_bowtie.add_argument('-d', '--databaseListFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
+  # parser_bowtie.add_argument('-t', '--thread', action='store', nargs='?', type=int, default=8, help="Thread number")
+  # parser_bowtie.add_argument('--fastq2fasta', action='store_true', default=False, help="Convert fastq to fasta format for bowtie")
+  # parser_bowtie.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output file", required=NOT_DEBUG)
+
+  # # create the parser for the "count" command
+  # parser_count = subparsers.add_parser('count')
+  # parser_count.add_argument('-i', '--input', action='store', nargs='?', help='Input bowtie result list file', required=NOT_DEBUG)
+  # parser_count.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
+  # parser_count.add_argument('--category_name', action='store', nargs='?', help="Input category name and ignore the one in bowtie result file")
+  # parser_count.add_argument('-o', '--output', action='store', nargs='?', default="-", help="Output count file", required=NOT_DEBUG)
   
-  parser_sequential_count = subparsers.add_parser('sequential_count')
-  parser_sequential_count.add_argument('-i', '--input', action='store', nargs='?', help='Input fastq list file', required=NOT_DEBUG)
-  parser_sequential_count.add_argument('-d', '--dbFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
-  parser_sequential_count.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
-  parser_sequential_count.add_argument('-o', '--output', action='store', nargs='?', help="Output count file", required=NOT_DEBUG)
+  # parser_sequential_count = subparsers.add_parser('sequential_count')
+  # parser_sequential_count.add_argument('-i', '--input', action='store', nargs='?', help='Input fastq list file', required=NOT_DEBUG)
+  # parser_sequential_count.add_argument('-d', '--dbFile', action='store', nargs='?', help='Input database list file', required=NOT_DEBUG)
+  # parser_sequential_count.add_argument('-c', '--countFile', action='store', nargs='?', help='Input dupcount list file', required=NOT_DEBUG)
+  # parser_sequential_count.add_argument('-o', '--output', action='store', nargs='?', help="Output count file", required=NOT_DEBUG)
   
   
   if not DEBUG and len(sys.argv)==1:
@@ -116,41 +119,42 @@ def main():
   args = parser.parse_args()
   #args.command = "database"
   
-  if args.command == "taxonomy":
+  if args.command == "dl_taxonomy":
     logger = initialize_logger(args.output + ".log", args)
     print(args)
     prepare_taxonomy(logger, args.output)
-  elif args.command == "database":
-    if DEBUG:
-      #args.input = "2"
-      args.input = "10239"
-      args.maximum_genome_in_file = 500
-      args.output_folder = "/scratch/cqs_share/references/genbank"
-      args.refseq = False
-
-    if args.prefix == None:
-      now = datetime.now()
-      args.prefix = now.strftime("%Y%m%d_")
-
-    database = "refseq" if args.refseq else "genbank"
+  elif args.command == "dl_assembly_summary":
+    logger = initialize_logger(args.output + ".log", args)
+    print(args)
+    download_assembly_summary(logger, args.output, args.database)
+  elif args.command == "dl_genome":
     logger = initialize_logger(os.path.join(args.output_folder, args.prefix + ".log"), args)
     print(args)
-    prepare_database(logger, args.input, args.output_folder, args.maximum_genome_in_file, args.prefix, database)
-  elif args.command == "database_whole":
+    prepare_segment_database(logger, args.taxonomy_file, args.assembly_summary_file, args.taxonomy_id, args.output_folder, args.prefix, args.maximum_genome_in_file, args.reference_representative_only)
+  elif args.command == "bowtie_index":
     if DEBUG:
-      #args.input = "2"
-      args.input = "10239"
-      args.output_folder = "/scratch/cqs_share/references/genbank"
-      args.refseq = False
-
-    if args.prefix == None:
-      now = datetime.now()
-      args.prefix = now.strftime("%Y%m%d_")
-
-    database = "refseq" if args.refseq else "genbank"
-    logger = initialize_logger(os.path.join(args.output_folder, args.prefix + ".log"), args)
+      args.input = "/scratch/cqs_share/references/refseq/bacteria/20200321_assembly_summary.txt.files.list"
+      args.thread = 8
+    logger = initialize_logger(args.input + ".log", args)
     print(args)
-    prepare_database_as_whole(logger, args.input, args.output_folder, args.prefix, database)
+    prepare_index(logger, args.input, args.thread, args.force, args.slurm_template)
+  elif args.command == 'bowtie_count':
+    logger = initialize_logger(args.output + ".log", args)
+    print(args)
+    bowtie_count(logger, 
+                 input_list_file = args.input, 
+                 output_file = args.output,
+                 count_file = args.count, 
+                 species_file = args.species, 
+                 species_column = args.species_column)
+  elif args.command == 'count_table':
+    logger = initialize_logger(args.output_prefix + ".log", args)
+    print(args)
+    count_table(logger, 
+                input_list_file = args.input, 
+                output_prefix = args.output_prefix,
+                species_file = args.species, 
+                species_column = args.species_column)
   elif args.command == "fastq_to_database":
     if DEBUG:
       #args.input = "2"
@@ -162,13 +166,6 @@ def main():
     logger = initialize_logger(args.output + ".log", args)
     print(args)
     fastq_to_database(logger, args.input, args.sample_name, args.output, args.reads_per_file)
-  elif args.command == "index":
-    if DEBUG:
-      args.input = "/scratch/cqs_share/references/refseq/bacteria/20200321_assembly_summary.txt.files.list"
-      args.thread = 8
-    logger = initialize_logger(args.input + ".log", args)
-    print(args)
-    prepare_index(logger, args.input, args.thread, args.force, args.slurm, args.slurm_email)
   elif args.command == "bowtie":
     if DEBUG:
       args.input = "/scratch/cqs/kasey_vickers_projects/testdata/VLDL_WZ_clipped_identical.unmapped.fastq.gz"
@@ -192,8 +189,7 @@ def main():
     count(logger, args.input, args.output, args.countFile, args.category_name)
   elif args.command == "sequential_count":
     logger = initialize_logger(args.output + ".log", args)
-    sequential_count(logger, args.input, args.dbFile, args.output, args.countFile)
-
+    #sequential_count(logger, args.input, args.dbFile, args.output, args.countFile)
   
 if __name__ == "__main__":
   main()

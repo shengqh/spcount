@@ -1,0 +1,43 @@
+
+from .Query import Query
+
+class Species(object):
+  def __init__(self, name):
+    self.name = name
+    self.queries = {}
+    self.queries_set = {}
+    self.is_subset = False
+    self.is_identical = False
+    self.identical_species = []
+  
+  def add_auery(self, sample, query):
+    self.queries.setdefault(sample, []).append(query)
+    self.queries_set.setdefault(sample, set()).add(query.name)
+
+  def sum_query_count(self):
+    self.sample_query_count = {sample:sum([q.count for q in self.queries[sample]]) for sample in self.queries.keys()}
+    self.query_count = sum(self.sample_query_count.values())
+
+  def num_of_species(self):
+    result = len(self.identical_species) + 1
+    return(result)
+
+  def sum_estimated_count(self):
+    nos = self.num_of_species()
+    self.sample_estimated_count = {sample:nos * sum([q.estimated_count for q in self.queries[sample]]) for sample in self.queries.keys()}
+    self.estimated_count = sum(self.sample_estimated_count.values())
+
+  def contains(self, another):
+    for sample in another.sample_query_count.keys():
+      if not sample in self.sample_query_count:
+        return(False)
+      if self.sample_query_count[sample] < another.sample_query_count[sample]:
+        return(False)
+
+    for sample in another.queries.keys():
+      another_q = another.queries_set[sample]
+      self_q = self.queries_set[sample]
+      if not another_q.issubset(self_q):
+          return(False)
+      
+    return(True)
