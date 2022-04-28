@@ -82,7 +82,9 @@ def main():
   parser_table.add_argument('-i', '--input', action='store', nargs='?', help='Input count list file', required=NOT_DEBUG)
   parser_table.add_argument('-s', '--species', action='store', nargs='?', help='Input species file', required=NOT_DEBUG)
   parser_table.add_argument('-t', '--species_column', action='store', default="species", nargs='?', help='Input species column')
+  parser_table.add_argument('-a', '--aggregate_rate', action='store', type=float, default=0.95, help='Input aggregate rate (default 0.95)')
   parser_table.add_argument('-o', '--output_prefix', action='store', nargs='?', help="Output prefix", required=NOT_DEBUG)
+  parser_table.add_argument('-d', '--debug_mode', action='store_true', help="Debug mode")
 
   # parser_fastq_to_database = subparsers.add_parser('fastq_to_database')
   # parser_fastq_to_database.add_argument('-i', '--input', action='store', nargs='?', help='Input FASTQ file', required=NOT_DEBUG)
@@ -154,7 +156,9 @@ def main():
                 input_list_file = args.input, 
                 output_prefix = args.output_prefix,
                 species_file = args.species, 
-                species_column = args.species_column)
+                species_column = args.species_column,
+                aggregate_rate = args.aggregate_rate,
+                debug_mode = args.debug_mode)
   elif args.command == "fastq_to_database":
     if DEBUG:
       #args.input = "2"

@@ -2,21 +2,31 @@
 from .Query import Query
 
 class Species(object):
-  def __init__(self, name):
+  def __init__(self, name, rank=""):
     self.name = name
+    self.rank = rank
     self.queries = {}
     self.queries_set = {}
     self.is_subset = False
     self.is_identical = False
     self.identical_species = []
+    self.sub_species = []
   
-  def add_auery(self, sample, query):
-    self.queries.setdefault(sample, []).append(query)
-    self.queries_set.setdefault(sample, set()).add(query.name)
+  def add_query(self, query):
+    self.queries.setdefault(query.sample, []).append(query)
+    self.queries_set.setdefault(query.sample, set()).add(query.name)
 
   def sum_query_count(self):
     self.sample_query_count = {sample:sum([q.count for q in self.queries[sample]]) for sample in self.queries.keys()}
     self.query_count = sum(self.sample_query_count.values())
+
+  def get_query_count_str(self, samples):
+    result = "\t".join("{:.2f}".format(self.sample_query_count[sample]) if sample in self.sample_query_count else "0" for sample in samples)
+    return(result)
+
+  def get_estimated_count_str(self, samples):
+    result = "\t".join("{:.2f}".format(self.sample_estimated_count[sample]) if sample in self.sample_estimated_count else "0" for sample in samples)
+    return(result)
 
   def num_of_species(self):
     result = len(self.identical_species) + 1

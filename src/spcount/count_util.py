@@ -1,6 +1,10 @@
 import gzip
 import re
 import pickle
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import OrderedDict
 
 from .CategoryEntry import CategoryEntry
 from .common_util import readFileMap
@@ -57,8 +61,8 @@ def bowtie_count(logger, input_list_file, output_file, count_file, species_file,
   with open(count_file, "rt") as fin:
     fin.readline()
     for line in fin:
-      parts=line.split('\t')
-      count_map[parts[0]] = parts[1]
+      parts=line.rstrip().split('\t')
+      count_map[parts[0]] = [parts[1], parts[2]]
 
   logger.info(f"reading species file {species_file}")
   species_map={}
@@ -84,20 +88,18 @@ def bowtie_count(logger, input_list_file, output_file, count_file, species_file,
           read_map.setdefault(query,set()).add(species)
 
   logger.info(f"merge all bowtie result ...")
-  all_queries = [[query, int(count_map[query]), ",".join(read_map[query])] for query in read_map.keys()]   
+  all_queries = [[query, int(count_map[query][0]), count_map[query][1], ",".join(read_map[query])] for query in read_map.keys()]   
   all_queries.sort(key=lambda x:x[1], reverse=True)
 
   logger.info(f"output to {output_file} ...")
   with gzip.open(output_file, "wt") as fout:
-    fout.write("read\tcount\tspecies\n")
+    fout.write("read\tcount\tsequence\tspecies\n")
     for query in all_queries:
-      fout.write(f"{query[0]}\t{query[1]}\t{query[2]}\n")
+      fout.write(f"{query[0]}\t{query[1]}\t{query[2]}\t{query[3]}\n")
 
   logger.info("done")
 
-def count_table(logger, input_list_file, output_prefix, species_file, species_column='species'):
-
-  logger.info("reading species taxonomy map from " + species_file + "...")
+def read_species_taxonomy_map(species_file):
   species_taxonomy_map = {}
   with open(species_file, "rt") as fin:
     fin.readline()
@@ -105,6 +107,7 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
       parts = line.rstrip().split('\t')
       if parts[12] not in species_taxonomy_map:
         species_taxonomy_map[parts[12]] = {
+          'species':parts[12],
           'genus':parts[11],
           'family':parts[10],
           'order':parts[9],
@@ -112,46 +115,125 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
           'phylum':parts[7],
           'superkingdom':parts[5],
       }
+  return(species_taxonomy_map)
 
-  query_list = []
-  species_map = {}
-  samples=[]
+def read_file_map(input_list_file):
+  file_map = OrderedDict()
   with open(input_list_file, "rt") as fl:
     for line in fl:
       parts = line.rstrip().split('\t')
-      count_file = parts[0]
-      sample=parts[1]
-      samples.append(sample)
+      file_map[parts[1]]=parts[0]
+  return(file_map)
+
+def read_query_list(logger, file_map, debug_mode=False):
+  query_list = []
+  for sample, count_file in file_map.items():
+    if logger != None:
       logger.info(f"parsing {count_file}")
-      with gzip.open(count_file, "rt") as fin:
-        fin.readline()
-        for bl in fin:
-          bparts = bl.split('\t')
-          query_name = bparts[0].split(' ')[0]
-          count = int(bparts[1])
-          species_list = bparts[2].rstrip().split(',')
-          query = Query(query_name, count, species_list)
-          query_list.append(query)
-          for species in species_list:
-            if species not in species_map:
-              species_map[species] = Species(species)
-            species_map[species].add_auery(sample, query)
 
-  species_list = [v for v in species_map.values()]
-  species_map.clear()
+    with gzip.open(count_file, "rt") as fin:
+      fin.readline()
+      bcount = 0
+      for bl in fin:
+        bparts = bl.split('\t')
+        query_name = bparts[0].split(' ')[0]
+        count = int(bparts[1])
+        seq = bparts[2]
+        species_list = bparts[3].rstrip().split(',')
+        query = Query(sample, query_name, seq, count, species_list)
+        query_list.append(query)
+        bcount += 1
+        if debug_mode and bcount == 10000:
+          break
+  return(query_list)
 
-  for sv in species_list:
-    sv.sum_query_count()
+def build_species_list(query_list):
+  species_map = {}
+  for query in query_list:
+    for species in query.species_list:
+      if species not in species_map:
+        species_map[species] = Species(species)
+      species_map[species].add_query(query)
+  result = list(species_map.values())
+  for species in result:
+    species.sum_query_count()
+  result.sort(key=lambda x:x.query_count, reverse=True)
+  return(result)
 
-  species_list.sort(key=lambda x:x.query_count, reverse=True)
+# aggregate each query to unique node. The result contains nodes from different ranks.
+def build_aggregate_node_list(query_list, species_taxonomy_map, ranks, aggregate_rate):
+  agg_species_list = {}
+  for q in query_list:
+    rank, rank_name = q.get_unique_rank(species_taxonomy_map, ranks, aggregate_rate)
+    species = agg_species_list.get(rank_name)
+    if species == None:
+      species = Species(rank_name, rank)
+      agg_species_list[rank_name] = species
+    species.add_query(q)
 
-  # myobj={ "species_taxonomy_map":species_taxonomy_map, 
-  #         "species_list": species_list,
-  #         "samples": samples,
-  #         "query_list": query_list }
+  result = list(agg_species_list.values())
+  for species in result:
+    species.sum_query_count()
+  result.sort(key=lambda x:x.query_count, reverse=True)
+  return(result)
 
-  # with open(output_prefix + '.pickle', 'wb') as handle:
-  #   pickle.dump(myobj, handle, protocol=pickle.HIGHEST_PROTOCOL)
+# aggregate each query to specific rank. The query doesn't aggregated to one node will be assigned to None.
+def build_aggregate_rank_list(query_list, species_taxonomy_map, rank, aggregate_rate):
+  rank_map = {}
+  for q in query_list:
+    rank_name = q.aggregate_to_rank(species_taxonomy_map, rank, aggregate_rate)
+    rank_obj = rank_map.get(rank_name)
+    if rank_obj == None:
+      rank_obj = Species(rank_name, rank)
+      rank_map[rank_name] = rank_obj
+    rank_obj.add_query(q)
+  result = list(rank_map.values())
+  for rank_obj in result:
+    rank_obj.sum_query_count()
+  result.sort(key=lambda x:x.query_count, reverse=True)
+  return(result)
+
+def output_rank_list(output_file, rank_list, samples):
+  with open(output_file, "wt") as fout:
+    fout.write("Rank_name\tRank\t" + "\t".join(samples) + "\n")
+    for rank_obj in rank_list:
+      sample_count_str = rank_obj.get_query_count_str(samples)
+      fout.write(f"{rank_obj.name}\t{rank_obj.rank}\t{sample_count_str}\n")
+  
+def count_table(logger, input_list_file, output_prefix, species_file, species_column='species', aggregate_rate=0.95, debug_mode=False):
+  logger.info("reading species taxonomy map from " + species_file + "...")
+  species_taxonomy_map = read_species_taxonomy_map(species_file)
+
+  file_map = read_file_map(input_list_file)
+
+  samples=list(file_map.keys())
+
+  query_list = read_query_list(logger, file_map, debug_mode)
+
+  species_list = build_species_list(query_list)
+
+  for i1 in range(0, len(species_list)-1):
+    if species_list[i1].is_subset:
+      continue
+    if i1 % 100 == 0:
+      logger.info(f"checking subset: {i1+1} / {len(species_list)}")
+    for i2 in range(i1+1, len(species_list)):
+      if species_list[i2].is_subset:
+        continue
+      if species_list[i1].contains(species_list[i2]):
+        species_list[i2].is_subset = True
+
+  logger.info("remove subset species from query")
+  for species in species_list:
+    if species.is_subset:
+      for qlist in species.queries.values():
+        for q in qlist:
+          q.species_list.remove(species.name)
+
+  old_len = len(species_list)
+  species_list = [sv for sv in species_list if not sv.is_subset]
+  new_len = len(species_list)
+  logger.info(f"{old_len - new_len} subset were removed")
 
   logger.info("merge identical")
   for sv in species_list:
@@ -175,30 +257,13 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
   old_len = len(species_list)
   new_len = len([sv for sv in species_list if not sv.is_identical])
   logger.info(f"{old_len - new_len} identical species were found")
-
-  for i1 in range(0, len(species_list)-1):
-    if species_list[i1].is_subset or species_list[i1].is_identical:
-      continue
-    if i1 % 100 == 0:
-      logger.info(f"checking subset: {i1+1} / {len(species_list)}")
-    for i2 in range(i1+1, len(species_list)):
-      if species_list[i2].is_subset or species_list[i1].is_identical:
-        continue
-      if species_list[i1].contains(species_list[i2]):
-        species_list[i2].is_subset = True
-
-  #remove subset species from query 
-  for species in species_list:
-    if species.is_subset:
-      all_names = [species.name] + species.identical_species
-      for qlist in species.queries.values():
-        for q in qlist:
-          q.remove_species(all_names)
-
-  old_len = len(species_list)
-  species_list = [sv for sv in species_list if not sv.is_subset]
-  new_len = len(species_list)
-  logger.info(f"{old_len - new_len} subset were removed")
+  # if debug_mode:
+  #   myobj={ "species_taxonomy_map":species_taxonomy_map, 
+  #           "species_list": species_list,
+  #           "samples": samples,
+  #           "query_list": query_list }
+  #   with open(output_prefix + '.pickle', 'wb') as handle:
+  #     pickle.dump(myobj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
   with open(output_prefix + ".species.query.count", "wt") as fout:
     fout.write("Feature\t" + "\t".join(samples) + "\n")
@@ -231,7 +296,12 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
 
   levels = [ 'genus', 'family', 'order', 'class', 'phylum']
   for level in levels:
-    logger.info("output " + level)
+    logger.info(f"output aggregated count of rank {level} ...")
+    rank_list = build_aggregate_rank_list(query_list, species_taxonomy_map, level, aggregate_rate)
+    output_rank_list(output_prefix + f".{level}.aggregated.count", rank_list, samples)
+    rank_list = None
+
+    logger.info(f"output query/estimated count of rank {level} ...")
     cat_map = {}
     for species in species_list:
       cat_name = species_taxonomy_map[species.name][level]
@@ -262,15 +332,20 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
       fout.write("Feature\t" + "\t".join(samples) + "\n")
       for species in cats:
         species_name = species.name
-        countstr = "\t".join(str(species.sample_query_count[sample]) if sample in species.sample_query_count else "0" for sample in samples)
+        countstr = species.get_query_count_str(samples)
         fout.write(f"{species_name}\t{countstr}\n")
 
     with open(output_prefix + "." + level + ".estimated.count", "wt") as fout:
       fout.write("Feature\t" + "\t".join(samples) + "\n")
       for species in cats:
         species_name = species.name
-        countstr = "\t".join("{:.2f}".format(species.sample_estimated_count[sample]) if sample in species.sample_estimated_count else "0" for sample in samples)
+        countstr = species.get_estimated_count_str(samples)
         fout.write(f"{species_name}\t{countstr}\n")
+
+  logger.info("output aggregated node ...")
+  ranks=[ 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
+  rank_list = build_aggregate_node_list(query_list, species_taxonomy_map, ranks, aggregate_rate)
+  output_rank_list(output_prefix + ".tree.count", rank_list, samples)
 
   logger.info("done")
 
