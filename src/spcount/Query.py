@@ -1,15 +1,12 @@
 import pandas as pd
 
 class Query(object):
-  def __init__(self, sample, name, seq, count, species_list, rank = "species"):
+  def __init__(self, sample, name, count, species_list, rank = "species"):
     self.sample = sample
     self.name = name
-    self.seq = seq
     self.count = count
     self.species_list = species_list
     self.rank = rank
-    self.unique_rank = ""
-    self.unique_rank_name = ""
   
   def remove_species(self, species_list):
     for species in species_list:
@@ -35,6 +32,12 @@ class Query(object):
       raise Exception(f"Cannot find aggregated rank for {'.'.join(self.species_list)}")
   
   def aggregate_to_rank(self, species_taxonomy_map, rank, aggregate_rate=0.95):
+    if self.rank == rank:
+      if len(self.species_list) > 1:
+        return("AmbiguousRanks")
+      else:
+        return(self.species_list[0])
+
     rank_list = [species_taxonomy_map[s][rank] for s in self.species_list]
     vc = pd.value_counts(rank_list, sort=True, ascending=False)
     ar = vc[0] / len(rank_list)

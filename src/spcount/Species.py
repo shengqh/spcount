@@ -21,7 +21,7 @@ class Species(object):
     self.query_count = sum(self.sample_query_count.values())
 
   def get_query_count_str(self, samples):
-    result = "\t".join("{:.2f}".format(self.sample_query_count[sample]) if sample in self.sample_query_count else "0" for sample in samples)
+    result = "\t".join(str(self.sample_query_count[sample]) if sample in self.sample_query_count else "0" for sample in samples)
     return(result)
 
   def get_estimated_count_str(self, samples):

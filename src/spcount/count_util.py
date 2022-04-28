@@ -11,6 +11,7 @@ from .common_util import readFileMap
 from .BowtieCountItem import BowtieCountItem, readBowtieTextFile, getQueryMap, assignCount
 from .Species import Species
 from .Query import Query
+from .Sequence import Sequence
 
 def removeSubset(logger, catMap):
   catItems = [v for v in catMap.values()]
@@ -125,11 +126,37 @@ def read_file_map(input_list_file):
       file_map[parts[1]]=parts[0]
   return(file_map)
 
+def read_sequence_list(logger, file_map, debug_mode=False):
+  sequence_map = {}
+  for sample, count_file in file_map.items():
+    if logger != None:
+      logger.info(f"parsing {count_file} for sequence ...")
+
+    with gzip.open(count_file, "rt") as fin:
+      fin.readline()
+      bcount = 0
+      for bl in fin:
+        bparts = bl.split('\t')
+        count = int(bparts[1])
+        seq = bparts[2]
+        sequence = sequence_map.get(seq)
+        if sequence == None:
+          sequence = Sequence(seq)
+          sequence_map[seq] = sequence
+        sequence.add_sample_count(sample, count)
+
+        bcount += 1
+        if debug_mode and bcount == 10000:
+          break
+  result = list(sequence_map.values())
+  result.sort(key=lambda x:x.query_count, reverse=True)
+  return(result)
+
 def read_query_list(logger, file_map, debug_mode=False):
   query_list = []
   for sample, count_file in file_map.items():
     if logger != None:
-      logger.info(f"parsing {count_file}")
+      logger.info(f"parsing {count_file} for query")
 
     with gzip.open(count_file, "rt") as fin:
       fin.readline()
@@ -138,9 +165,8 @@ def read_query_list(logger, file_map, debug_mode=False):
         bparts = bl.split('\t')
         query_name = bparts[0].split(' ')[0]
         count = int(bparts[1])
-        seq = bparts[2]
         species_list = bparts[3].rstrip().split(',')
-        query = Query(sample, query_name, seq, count, species_list)
+        query = Query(sample, query_name, count, species_list)
         query_list.append(query)
         bcount += 1
         if debug_mode and bcount == 10000:
@@ -208,8 +234,19 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
 
   samples=list(file_map.keys())
 
+  logger.info("building sequence list ...")
+  sequence_list = read_sequence_list(logger, file_map, debug_mode)
+  with open(output_prefix + ".read.count", "wt") as fout:
+    fout.write("Sequence\t" + "\t".join(samples) + "\n")
+    for sequence in sequence_list:
+      sample_count_str = sequence.get_sample_count_str(samples)
+      fout.write(f"{sequence.seq}\t{sample_count_str}\n")
+  sequence_list = None
+
+  logger.info("building query list ...")
   query_list = read_query_list(logger, file_map, debug_mode)
 
+  logger.info("building species list from query list ...")
   species_list = build_species_list(query_list)
 
   for i1 in range(0, len(species_list)-1):
@@ -265,6 +302,12 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
   #   with open(output_prefix + '.pickle', 'wb') as handle:
   #     pickle.dump(myobj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+  logger.info(f"output aggregated count of rank species ...")
+  rank_list = build_aggregate_rank_list(query_list, species_taxonomy_map, "species", aggregate_rate)
+  output_rank_list(output_prefix + f".species.aggregated.count", rank_list, samples)
+  rank_list = None
+
+  logger.info(f"output query count of rank species ...")
   with open(output_prefix + ".species.query.count", "wt") as fout:
     fout.write("Feature\t" + "\t".join(samples) + "\n")
     for species in species_list:
@@ -276,6 +319,7 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
       countstr = "\t".join(str(species.sample_query_count[sample]) if sample in species.sample_query_count else "0" for sample in samples)
       fout.write(f"{species_name}\t{countstr}\n")
 
+  logger.info(f"output estimated count of rank species ...")
   for query in query_list:
     query.estimate_count()
 
