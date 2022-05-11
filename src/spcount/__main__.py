@@ -80,8 +80,9 @@ def main():
 
   parser_table = subparsers.add_parser('count_table')
   parser_table.add_argument('-i', '--input', action='store', nargs='?', help='Input count list file', required=NOT_DEBUG)
+  parser_table.add_argument('-t', '--taxonomy_file', action='store', nargs='?', required=NOT_DEBUG, help='Input taxonomy file')
   parser_table.add_argument('-s', '--species', action='store', nargs='?', help='Input species file', required=NOT_DEBUG)
-  parser_table.add_argument('-t', '--species_column', action='store', default="species", nargs='?', help='Input species column')
+  parser_table.add_argument('-c', '--species_column', action='store', default="species", nargs='?', help='Input species column')
   parser_table.add_argument('-a', '--aggregate_rate', action='store', type=float, default=0.95, help='Input aggregate rate (default 0.95)')
   parser_table.add_argument('-o', '--output_prefix', action='store', nargs='?', help="Output prefix", required=NOT_DEBUG)
   parser_table.add_argument('-d', '--debug_mode', action='store_true', help="Debug mode")
@@ -155,6 +156,7 @@ def main():
     count_table(logger, 
                 input_list_file = args.input, 
                 output_prefix = args.output_prefix,
+                taxonomy_file = args.taxonomy_file,
                 species_file = args.species, 
                 species_column = args.species_column,
                 aggregate_rate = args.aggregate_rate,

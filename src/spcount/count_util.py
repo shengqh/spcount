@@ -221,12 +221,17 @@ def build_aggregate_rank_list(query_list, species_taxonomy_map, rank, aggregate_
 
 def output_rank_list(output_file, rank_list, samples):
   with open(output_file, "wt") as fout:
-    fout.write("Rank_name\tRank\t" + "\t".join(samples) + "\n")
+    fout.write("Rank_name\tTaxonomyId\tRank\t" + "\t".join(samples) + "\n")
     for rank_obj in rank_list:
       sample_count_str = rank_obj.get_query_count_str(samples)
-      fout.write(f"{rank_obj.name}\t{rank_obj.rank}\t{sample_count_str}\n")
+      fout.write(f"{rank_obj.name}\t{rank_obj.taxid}\t{rank_obj.rank}\t{sample_count_str}\n")
   
-def count_table(logger, input_list_file, output_prefix, species_file, species_column='species', aggregate_rate=0.95, debug_mode=False):
+def count_table(logger, input_list_file, output_prefix, taxonomy_file, species_file, species_column='species', aggregate_rate=0.95, debug_mode=False):
+  logger.info(f"Reading taxonomy from {taxonomy_file} ...")
+  taxonomy=pd.read_csv(taxonomy_file, sep="\t")
+  taxonomy_name_id_map=dict(zip(taxonomy.ScientificName, taxonomy.Id))
+  taxonomy_name_id_map['AmbiguousRanks'] = -1
+
   logger.info("reading species taxonomy map from " + species_file + "...")
   species_taxonomy_map = read_species_taxonomy_map(species_file)
 
@@ -234,6 +239,7 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
 
   samples=list(file_map.keys())
 
+  #in order to save memory, we handle the sequence first. then in query mode, we don't need to store sequence anymore.
   logger.info("building sequence list ...")
   sequence_list = read_sequence_list(logger, file_map, debug_mode)
   with open(output_prefix + ".read.count", "wt") as fout:
@@ -304,6 +310,8 @@ def count_table(logger, input_list_file, output_prefix, species_file, species_co
 
   logger.info(f"output aggregated count of rank species ...")
   rank_list = build_aggregate_rank_list(query_list, species_taxonomy_map, "species", aggregate_rate)
+  for rank in rank_list:
+    rank.taxid = taxonomy_name_id_map[rank.name]
   output_rank_list(output_prefix + f".species.aggregated.count", rank_list, samples)
   rank_list = None
 

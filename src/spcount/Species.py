@@ -5,6 +5,7 @@ class Species(object):
   def __init__(self, name, rank=""):
     self.name = name
     self.rank = rank
+    self.taxid = ""
     self.queries = {}
     self.queries_set = {}
     self.is_subset = False
