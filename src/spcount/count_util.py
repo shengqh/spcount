@@ -219,18 +219,25 @@ def build_aggregate_rank_list(query_list, species_taxonomy_map, rank, aggregate_
   result.sort(key=lambda x:x.query_count, reverse=True)
   return(result)
 
-def output_rank_list(output_file, rank_list, samples):
+def output_rank_list(output_file, rank_list, samples, with_tax_id=False):
   with open(output_file, "wt") as fout:
-    fout.write("Rank_name\tTaxonomyId\tRank\t" + "\t".join(samples) + "\n")
+    if with_tax_id:
+      fout.write("Rank_name\tTaxonomyId\tRank\t" + "\t".join(samples) + "\n")
+    else:
+      fout.write("Rank_name\tRank\t" + "\t".join(samples) + "\n")
     for rank_obj in rank_list:
       sample_count_str = rank_obj.get_query_count_str(samples)
-      fout.write(f"{rank_obj.name}\t{rank_obj.taxid}\t{rank_obj.rank}\t{sample_count_str}\n")
+      if with_tax_id:
+        fout.write(f"{rank_obj.name}\t{rank_obj.taxid}\t{rank_obj.rank}\t{sample_count_str}\n")
+      else:
+        fout.write(f"{rank_obj.name}\t{rank_obj.rank}\t{sample_count_str}\n")
   
 def count_table(logger, input_list_file, output_prefix, taxonomy_file, species_file, species_column='species', aggregate_rate=0.95, debug_mode=False):
   logger.info(f"Reading taxonomy from {taxonomy_file} ...")
   taxonomy=pd.read_csv(taxonomy_file, sep="\t")
   taxonomy_name_id_map=dict(zip(taxonomy.ScientificName, taxonomy.Id))
   taxonomy_name_id_map['AmbiguousRanks'] = -1
+  taxonomy_name_id_map['Unclassified'] = -1
 
   logger.info("reading species taxonomy map from " + species_file + "...")
   species_taxonomy_map = read_species_taxonomy_map(species_file)
@@ -310,9 +317,7 @@ def count_table(logger, input_list_file, output_prefix, taxonomy_file, species_f
 
   logger.info(f"output aggregated count of rank species ...")
   rank_list = build_aggregate_rank_list(query_list, species_taxonomy_map, "species", aggregate_rate)
-  for rank in rank_list:
-    rank.taxid = taxonomy_name_id_map[rank.name]
-  output_rank_list(output_prefix + f".species.aggregated.count", rank_list, samples)
+  output_rank_list(output_prefix + f".species.aggregated.count", rank_list, samples, with_tax_id=False)
   rank_list = None
 
   logger.info(f"output query count of rank species ...")
@@ -350,7 +355,7 @@ def count_table(logger, input_list_file, output_prefix, taxonomy_file, species_f
   for level in levels:
     logger.info(f"output aggregated count of rank {level} ...")
     rank_list = build_aggregate_rank_list(query_list, species_taxonomy_map, level, aggregate_rate)
-    output_rank_list(output_prefix + f".{level}.aggregated.count", rank_list, samples)
+    output_rank_list(output_prefix + f".{level}.aggregated.count", rank_list, samples, with_tax_id=False)
     rank_list = None
 
     logger.info(f"output query/estimated count of rank {level} ...")
@@ -397,7 +402,9 @@ def count_table(logger, input_list_file, output_prefix, taxonomy_file, species_f
   logger.info("output aggregated node ...")
   ranks=[ 'genus', 'family', 'order', 'class', 'phylum', 'superkingdom']
   rank_list = build_aggregate_node_list(query_list, species_taxonomy_map, ranks, aggregate_rate)
-  output_rank_list(output_prefix + ".tree.count", rank_list, samples)
+  for rank in rank_list:
+    rank.taxid = taxonomy_name_id_map[rank.name]
+  output_rank_list(output_prefix + ".tree.count", rank_list, samples, with_tax_id=True)
 
   logger.info("done")
 
