@@ -1,21 +1,25 @@
 
+from collections import defaultdict
 from .Query import Query
 
 class Species(object):
+  __slots__ = "name", "rank", "taxid", "queries", "queries_set", "is_subset", "is_identical", "identical_species", "sample_query_count", "query_count", "sub_species", "sample_estimated_count", "estimated_count"
+
   def __init__(self, name, rank=""):
     self.name = name
     self.rank = rank
     self.taxid = ""
-    self.queries = {}
-    self.queries_set = {}
+    self.queries = defaultdict(list)
+    self.queries_set = defaultdict(set)
     self.is_subset = False
     self.is_identical = False
     self.identical_species = []
+    self.sample_query_count = {}
     self.sub_species = []
   
   def add_query(self, query):
-    self.queries.setdefault(query.sample, []).append(query)
-    self.queries_set.setdefault(query.sample, set()).add(query.name)
+    self.queries[query.sample].append(query)
+    self.queries_set[query.sample].add(query.name)
 
   def sum_query_count(self):
     self.sample_query_count = {sample:sum([q.count for q in self.queries[sample]]) for sample in self.queries.keys()}

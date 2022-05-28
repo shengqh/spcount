@@ -1,12 +1,15 @@
 import pandas as pd
 
 class Query(object):
+  __slots__ = "sample", "name", "count", "species_list", "rank", "estimated_count", 
+
   def __init__(self, sample, name, count, species_list, rank = "species"):
     self.sample = sample
     self.name = name
     self.count = count
     self.species_list = species_list
     self.rank = rank
+    self.estimated_count = 0
   
   def remove_species(self, species_list):
     for species in species_list:

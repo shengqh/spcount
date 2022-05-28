@@ -152,12 +152,46 @@ def read_sequence_list(logger, file_map, debug_mode=False):
   result.sort(key=lambda x:x.query_count, reverse=True)
   return(result)
 
+def merge_queries(logger, queries):
+  logger.info("sort species_list")
+  for q in queries:
+    q.species_list.sort()
+
+  logger.info("sort queries")
+  queries.sort(key=lambda x:len(x.species_list), reverse=True)
+
+  logger.info("merge queries")
+  for i1 in range(0, len(queries)):
+    q1 = queries[i1]
+    if q1 == None:
+      continue
+    l1 = len(q1.species_list)
+
+    for i2 in range(i1+1, len(queries)):
+      q2 = queries[i2]
+      if q2 == None:
+        continue
+
+      if l1 > len(q2.species_list):
+        break
+
+      if q1.species_list == q2.species_list:
+        q1.count += q2.count
+        queries[i2] = None
+
+  logger.info(f"Before merge, queries = {len(queries)}")
+  queries = [q for q in queries if q != None]
+  logger.info(f"After merge, queries = {len(queries)}")
+
+  return(queries)
+
 def read_query_list(logger, file_map, debug_mode=False):
   query_list = []
   for sample, count_file in file_map.items():
     if logger != None:
       logger.info(f"parsing {count_file} for query")
 
+    cur_list = []
     with gzip.open(count_file, "rt") as fin:
       fin.readline()
       bcount = 0
@@ -167,10 +201,15 @@ def read_query_list(logger, file_map, debug_mode=False):
         count = int(bparts[1])
         species_list = bparts[3].rstrip().split(',')
         query = Query(sample, query_name, count, species_list)
-        query_list.append(query)
+        cur_list.append(query)
         bcount += 1
         if debug_mode and bcount == 10000:
           break
+  
+    cur_list = merge_queries(logger, cur_list)
+    query_list.extend(cur_list)
+    cur_list = None
+
   return(query_list)
 
 def build_species_list(query_list):
@@ -181,6 +220,10 @@ def build_species_list(query_list):
         species_map[species] = Species(species)
       species_map[species].add_query(query)
   result = list(species_map.values())
+
+  species_map.clear()
+  species_map = None
+
   for species in result:
     species.sum_query_count()
   result.sort(key=lambda x:x.query_count, reverse=True)
