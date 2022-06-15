@@ -9,6 +9,7 @@ from .taxonomy_util import prepare_taxonomy
 from .database_util import download_assembly_summary, prepare_segment_database, prepare_index, fastq_to_database
 from .bowtie_util import bowtie, bowtie_fastq2fasta
 from .count_util import bowtie_count, count_table
+from .visualization_util import krona
 
 def initialize_logger(logfile, args):
   logger = logging.getLogger('spcount')
@@ -87,6 +88,11 @@ def main():
   parser_table.add_argument('-o', '--output_prefix', action='store', nargs='?', help="Output prefix", required=NOT_DEBUG)
   parser_table.add_argument('-d', '--debug_mode', action='store_true', help="Debug mode")
 
+  parser_krona = subparsers.add_parser('krona')
+  parser_krona.add_argument('-i', '--input', action='store', nargs='?', help='Input tree count file', required=NOT_DEBUG)
+  parser_krona.add_argument('-t', '--group_file', action='store', nargs='?', required=NOT_DEBUG, help='Input group file')
+  parser_krona.add_argument('-o', '--output_prefix', action='store', nargs='?', help="Output prefix", required=NOT_DEBUG)
+
   # parser_fastq_to_database = subparsers.add_parser('fastq_to_database')
   # parser_fastq_to_database.add_argument('-i', '--input', action='store', nargs='?', help='Input FASTQ file', required=NOT_DEBUG)
   # parser_fastq_to_database.add_argument('--sample_name', action='store', nargs='?', help='Input sample name', required=NOT_DEBUG)
@@ -161,6 +167,13 @@ def main():
                 species_column = args.species_column,
                 aggregate_rate = args.aggregate_rate,
                 debug_mode = args.debug_mode)
+  elif args.command == "krona":
+    logger = initialize_logger(args.output_prefix + ".log", args)
+    print(args)
+    krona(logger, 
+      treeFile = args.input, 
+      groupFile = args.group_file, 
+      outputPrefix = args.output_prefix)
   elif args.command == "fastq_to_database":
     if DEBUG:
       #args.input = "2"
