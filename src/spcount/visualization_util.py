@@ -7,15 +7,23 @@ def draw_krona(logger, treeFile, taxonomyFolder, outputPrefix):
   for ind in range(3, tree_data.shape[1]):
     sample = tree_data.columns[ind]
     logger.info(f"processing {sample} ...")
-    subprocess.call(['ktImportTaxonomy', '-o', f"{outputPrefix}.{sample}.html", 
-                     '-s', f"{ind+1}", 
+    
+    count_file = f"{outputPrefix}.{sample}.txt"
+    count_df = tree_data.iloc[:,[0,1,ind]]
+    count_df = count_df[count_df.iloc[:,ind] > 0]
+    count_df.to_csv(count_file, sep="\t", index=None, header=None)
+    
+    args = ['ktImportTaxonomy', '-o', f"{outputPrefix}.{sample}.html", 
                      '-tax', taxonomyFolder, 
-                     f"{treeFile},{sample}"])
+                     '-m', '3',
+                     f"{count_file},{sample}"]
+    logger.info(" ".join(args))
+    subprocess.call(args)
 
 def krona(logger, treeFile, groupFile, taxonomyFolder, outputPrefix):
   logger.info("Start sample krona ...")
   
-  draw_krona(logger, treeFile, taxonomyFolder, outputPrefix)
+  #draw_krona(logger, treeFile, taxonomyFolder, outputPrefix)
 
   logger.info("Start group krona ...")
 
@@ -27,7 +35,7 @@ def krona(logger, treeFile, groupFile, taxonomyFolder, outputPrefix):
 
   group_data=tree_data.iloc[:, [0,1,2]]
 
-  group_data['All'] = tree_data.sum(axis=1)
+  group_data['All'] = tree_data.iloc[:,3:].sum(axis=1)
   for gf in groups_df.groupby('group'):
     gname = gf[0]
     gdf = gf[1]
