@@ -24,6 +24,7 @@ def krona(logger, treeFile, groupFile, outputPrefix):
 
   group_data=tree_data.iloc[:, [0,1,2]]
 
+  group_data['All'] = tree_data.sum(axis=1)
   for gf in groups_df.groupby('group'):
     gname = gf[0]
     gdf = gf[1]
