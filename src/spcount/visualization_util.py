@@ -10,7 +10,7 @@ def draw_krona(logger, treeFile, taxonomyFolder, outputPrefix):
     
     count_file = f"{outputPrefix}.{sample}.txt"
     count_df = tree_data.iloc[:,[0,1,ind]]
-    count_df = count_df[count_df.iloc[:,ind] > 0]
+    count_df = count_df[count_df.iloc[:,2] > 0]
     count_df.to_csv(count_file, sep="\t", index=None, header=None)
     
     args = ['ktImportTaxonomy', '-o', f"{outputPrefix}.{sample}.html", 
