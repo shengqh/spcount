@@ -90,7 +90,8 @@ def main():
 
   parser_krona = subparsers.add_parser('krona')
   parser_krona.add_argument('-i', '--input', action='store', nargs='?', help='Input tree count file', required=NOT_DEBUG)
-  parser_krona.add_argument('-t', '--group_file', action='store', nargs='?', required=NOT_DEBUG, help='Input group file')
+  parser_krona.add_argument('-g', '--group_file', action='store', nargs='?', required=NOT_DEBUG, help='Input group file')
+  parser_krona.add_argument('-t', '--taxonomy_folder', action='store', nargs='?', required=NOT_DEBUG, help='Path to directory containing a Krona taxonomy database (taxonomy.tab) to use.')
   parser_krona.add_argument('-o', '--output_prefix', action='store', nargs='?', help="Output prefix", required=NOT_DEBUG)
 
   # parser_fastq_to_database = subparsers.add_parser('fastq_to_database')
@@ -173,6 +174,7 @@ def main():
     krona(logger, 
       treeFile = args.input, 
       groupFile = args.group_file, 
+      taxonomyFolder = args.tax,
       outputPrefix = args.output_prefix)
   elif args.command == "fastq_to_database":
     if DEBUG:

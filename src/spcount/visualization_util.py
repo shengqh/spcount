@@ -2,17 +2,20 @@ import pandas as pd
 import subprocess
 import logging
 
-def draw_krona(logger, treeFile, outputPrefix):
+def draw_krona(logger, treeFile, taxonomyFolder, outputPrefix):
   tree_data = pd.read_csv(treeFile, sep="\t")
   for ind in range(3, tree_data.shape[1]):
     sample = tree_data.columns[ind]
     logger.info(f"processing {sample} ...")
-    subprocess.call(['ktImportTaxonomy', '-o', f"{outputPrefix}.{sample}.html", '-s', f"{ind+1}", f"{treeFile},{sample}"])
+    subprocess.call(['ktImportTaxonomy', '-o', f"{outputPrefix}.{sample}.html", 
+                     '-s', f"{ind+1}", 
+                     '-tax', taxonomyFolder, 
+                     f"{treeFile},{sample}"])
 
-def krona(logger, treeFile, groupFile, outputPrefix):
+def krona(logger, treeFile, groupFile, taxonomyFolder, outputPrefix):
   logger.info("Start sample krona ...")
   
-  draw_krona(logger, treeFile, outputPrefix)
+  draw_krona(logger, treeFile, taxonomyFolder, outputPrefix)
 
   logger.info("Start group krona ...")
 
@@ -34,10 +37,10 @@ def krona(logger, treeFile, groupFile, outputPrefix):
   group_file = outputPrefix + ".group.txt";
   group_data.to_csv(group_file, sep="\t", index=None)
 
-  draw_krona(logger, group_file, outputPrefix)
+  draw_krona(logger, group_file, taxonomyFolder, outputPrefix)
 
   logger.info("done")
 
 if __name__ == "__main__":
   logger = logging.getLogger('spcount')
-  krona(logger, "/scratch/cqs/shengq2/spcount/RA_97_93.tree.count", "/scratch/cqs/shengq2/spcount/fileList2.txt", "/scratch/cqs/shengq2/spcount/RA_97_93")
+  krona(logger, "/scratch/cqs/shengq2/spcount/RA_97_93.tree.count", "/scratch/cqs/shengq2/spcount/fileList2.txt", "/data/cqs/references/spcount/", "/scratch/cqs/shengq2/spcount/RA_97_93")
