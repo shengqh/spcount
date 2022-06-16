@@ -174,7 +174,7 @@ def main():
     krona(logger, 
       treeFile = args.input, 
       groupFile = args.group_file, 
-      taxonomyFolder = args.tax,
+      taxonomyFolder = args.taxonomy_folder,
       outputPrefix = args.output_prefix)
   elif args.command == "fastq_to_database":
     if DEBUG:
