@@ -23,7 +23,7 @@ def draw_krona(logger, treeFile, taxonomyFolder, outputPrefix):
 def krona(logger, treeFile, groupFile, taxonomyFolder, outputPrefix):
   logger.info("Start sample krona ...")
   
-  #draw_krona(logger, treeFile, taxonomyFolder, outputPrefix)
+  draw_krona(logger, treeFile, taxonomyFolder, outputPrefix)
 
   logger.info("Start group krona ...")
 
