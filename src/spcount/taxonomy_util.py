@@ -15,6 +15,12 @@ def find_parent(item, itemMap, rank):
       return None
     result = itemMap[result.ParentId]
 
+def depth(taxo, taxonomyMap):
+  if taxo.Id == taxo.ParentId:
+    return 0
+  else:
+    return depth(taxonomyMap[taxo.ParentId], taxonomyMap) + 1
+
 def prepare_taxonomy(logger, output_file):
   #if os.path.exists(output_file):
   #  logger.info(f"File exists: {output_file}")
@@ -45,7 +51,7 @@ def prepare_taxonomy(logger, output_file):
           parts = line.split('|')
           id = int(parts[0].strip())
           name = parts[1].strip()
-          taxonomies.append(TaxonomyItem(name, id, -1, ''))
+          taxonomies.append(TaxonomyItem(name, id, 0, ''))
 
     taxonomyMap = {item.Id:item for item in taxonomies}
 
@@ -58,6 +64,9 @@ def prepare_taxonomy(logger, output_file):
         rank = parts[2].strip()
         taxonomyMap[childId].ParentId = parentId
         taxonomyMap[childId].Rank = rank
+    
+    for taxo in taxonomies:
+      taxo.Depth = depth(taxo, taxonomyMap)  
 
   logger.info("Writing result ...")
   output_ranks = ['superkingdom', 'kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
@@ -68,6 +77,14 @@ def prepare_taxonomy(logger, output_file):
       item.RankMap[rank] = parentItem.Id if parentItem != None else None
 
   save_taxonomy(taxonomies, output_file, output_ranks)
+  
+  logger.info("Writing krona taxonomy db ...")
+  taxonomies.sort(key=lambda x:x.Id)
+  with open(os.path.join(os.path.dirname(output_file), "taxonomy.tab"), "wt") as fout:
+    for taxo in taxonomies:
+      if taxo.Id == taxo.ParentId:
+        taxo.ParentId = 0
+      fout.write(f"{taxo.Id}\t{taxo.Depth}\t{taxo.ParentId}\t{taxo.Rank}\t{taxo.Name}\n")
 
   #os.remove(target_file)
   logger.info(f"Result saved to {output_file} .")
