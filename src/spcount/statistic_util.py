@@ -5,17 +5,22 @@ import logging
 def shannon_value(x):
     return -(x * np.log(x))
   
-def shannon(logger, countFile, outputFile):
-  logger.info("read " + countFile + "...")
-  count_data = pd.read_csv(countFile, sep="\t", index_col=0)
-
-  logger.info("calculate shannon diversity index ...")
+def do_shannon(count_data):
   perc_count = count_data.div(count_data.sum(axis=0), axis=1)
 
   s_values = perc_count.applymap(shannon_value)
   shannon_values=s_values.sum(axis=0)
   shannon_values.name = "shannon"
   shannon_values.index.name = "sample"
+
+  return(shannon_values)
+  
+def shannon(logger, countFile, outputFile):
+  logger.info("read " + countFile + "...")
+  count_data = pd.read_csv(countFile, sep="\t", index_col=0)
+
+  logger.info("calculate shannon diversity index ...")
+  shannon_values = do_shannon(count_data)
 
   logger.info(f"save to {outputFile} ...")
   shannon_values.to_csv(outputFile)
