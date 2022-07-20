@@ -58,15 +58,20 @@ def krona(logger, treeFile, groupFile, taxonomyFolder, outputPrefix):
 
   logger.info(f"Read group info {groupFile} ...")
   groups_df=pd.read_csv(groupFile, sep="\t", header=None)
-  groups_df.rename(columns={groups_df.columns[0]:"sample", groups_df.columns.values[1]:"group"}, inplace=True)
+  groups_df.rename(columns={groups_df.columns[0]:"sample_name", groups_df.columns.values[1]:"group_name"}, inplace=True)
+
+  sample_matched = groups_df.sample_name.isin(tree_data.columns)
+  if not sample_matched.all():
+    unmatched = groups_df[~sample_matched].sample_name.tolist()
+    raise Exception(f"Check your data file {treeFile} and group file {groupFile}.\nSome samples in group file were not found in data file columns: " + ",".join(unmatched))
 
   group_data=tree_data.iloc[:, [0,1,2]]
 
   group_data['All'] = tree_data.iloc[:,3:].sum(axis=1)
-  for gf in groups_df.groupby('group'):
+  for gf in groups_df.groupby('group_name'):
     gname = gf[0]
     gdf = gf[1]
-    gsamples = gdf['sample'].tolist()
+    gsamples = gdf['sample_name'].tolist()
     group_data[gname] = tree_data[gsamples].sum(axis=1)
 
   group_file = outputPrefix + ".group.txt"
@@ -78,4 +83,4 @@ def krona(logger, treeFile, groupFile, taxonomyFolder, outputPrefix):
 
 if __name__ == "__main__":
   logger = logging.getLogger('spcount')
-  krona(logger, "/scratch/cqs/shengq2/spcount/RA_97_93.tree.count", "/scratch/cqs/shengq2/spcount/fileList2.txt", "/data/cqs/references/spcount/", "/scratch/cqs/shengq2/spcount/RA_97_93")
+  krona(logger, "/scratch/vickers_lab/projects/20220707_4893_2_RA_smRNA_mouse_v5_forSpcount/nonhost_genome/refseq_bacteria_table/result/RA_4893_2.species.estimated.count", "/scratch/vickers_lab/projects/20220707_4893_2_RA_smRNA_mouse_v5_forSpcount/data_visualization/refseq_bacteria_krona_estimated/result/RA_4893_2__fileList1.list", "/data/cqs/references/spcount/", "/scratch/vickers_lab/projects/20220707_4893_2_RA_smRNA_mouse_v5_forSpcount/data_visualization/refseq_bacteria_krona_estimated/result/RA_4893_2")
