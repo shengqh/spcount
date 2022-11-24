@@ -369,7 +369,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
       fFasta = None
       gindex = 0
       for genome in genomes:
-        gtax = root_taxonomy.loc[genome.taxid]
+        gtax = taxonomy.loc[genome.taxid]
         if gindex % genomeNumberPerFile == 0:
           if fFasta != None:
             fFasta.close()
@@ -390,10 +390,11 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
                 chrom = parts[0][1:]
                 ftx.write("%s\t%s\t%s\t%s\t%s" % (chrom, genome.accession, genome.organism_name, genome.taxid, gtax['Rank']))
                 for rank in output_ranks:
-                  if pd.isnull(gtax[rank]):
+                  taxonomyId = gtax[rank]
+                  if pd.isnull(taxonomyId):
                     ftx.write("\tUnclassified")
                   else:
-                    rtex=root_taxonomy.loc[gtax[rank]]
+                    rtex=taxonomy.loc[taxonomyId]
                     ftx.write(f"\t{rtex.ScientificName}")
                 ftx.write("\n")
       fFasta.close() 
