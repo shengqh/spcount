@@ -60,9 +60,9 @@ def main():
   parser_segment.add_argument('-i', '--taxonomy_id', action='store', type=int, default=2, nargs='?', required=NOT_DEBUG, help='Input taxonomy id (for example, 2 for bacteria)')
   parser_segment.add_argument('-t', '--taxonomy_file', action='store', nargs='?', required=NOT_DEBUG, help='Input taxonomy file')
   parser_segment.add_argument('-a', '--assembly_summary_file', action='store', nargs='?', required=NOT_DEBUG, help='Input assembly summary file')
-  parser_segment.add_argument('-n', '--maximum_genome_in_file', action='store', type=int, default=500, nargs='?', required=NOT_DEBUG, help='Input number of genome in each output file (default:500)')
+  parser_segment.add_argument('-n', '--maximum_genome_in_file', action='store', type=int, default=500, nargs='?', help='Input number of genome in each output file (default:500)')
   parser_segment.add_argument('-p', '--prefix', action='store', nargs='?', required=NOT_DEBUG, help='Input prefix of database')
-  parser_segment.add_argument('-r', '--reference_representative_only', action='store_true', required=NOT_DEBUG, help='Use reference or representative genome only')
+  parser_segment.add_argument('-r', '--reference_representative_only', action='store_true', help='Use reference or representative genome only')
   parser_segment.add_argument('-o', '--output_folder', action='store', nargs='?', required=NOT_DEBUG, help="Output folder")
 
   # create the parser for the "index" command
