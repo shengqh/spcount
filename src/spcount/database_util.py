@@ -363,7 +363,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
     logger.info("Output fasta file ...")
     output_ranks = ['superkingdom', 'kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
     bowtieIndecies = []
-    with open(os.path.join(outputFolder, prefix + ".taxonomy2.txt"), "wt") as ftx:
+    with open(os.path.join(outputFolder, prefix + ".taxonomy.txt"), "wt") as ftx:
       ftx.write("chrom\taccession\tscientific_name\ttaxid\trank\t%s\n" % "\t".join(output_ranks))
       findex = 0
       fFasta = None
