@@ -42,8 +42,8 @@ class Query(object):
         return(self.species_list[0])
 
     rank_list = [species_taxonomy_map[s][rank] for s in self.species_list]
-    vc = pd.value_counts(rank_list, sort=True, ascending=False)
-    ar = vc[0] / len(rank_list)
+    vc = pd.Series(rank_list).value_counts(sort=True, ascending=False)
+    ar = vc.iloc[0] / len(rank_list)
     if ar >= aggregate_rate:
       rank_name = vc.keys()[0]
       return(rank_name)
