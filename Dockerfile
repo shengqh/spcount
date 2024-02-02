@@ -17,6 +17,6 @@ RUN pip3 install --no-cache-dir --upgrade \
 
 RUN apt-get install -y tabix
     
-ENV CPDSEQER_VERSION="0.0.1"
+ENV spcount_VERSION="0.0.16"
 RUN pip3 install git+git@github.com:shengqh/spcount.git
 RUN spcount -h
