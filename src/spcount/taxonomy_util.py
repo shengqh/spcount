@@ -31,7 +31,7 @@ def prepare_taxonomy(logger, output_file):
   logger.info("Preparing taxonomy file %s ..." % output_file)
 
   #download taxonomy from ncbi
-  url="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
+  url="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
   target_file = output_file + "." + os.path.basename(url)
   if not os.path.exists(target_file):
     logger.info("Downloading %s ..." % url)
