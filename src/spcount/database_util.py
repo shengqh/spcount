@@ -20,6 +20,11 @@ class CategoryItem(object):
     self.Index = index
     self.NumberOfGenome = numberOfGenome
 
+def check_file_exists(ftp, filename):
+    dirname= os.path.dirname(filename)
+    file_list = ftp.nlst(dirname)
+    return filename in file_list
+
 def getCategory(source):
   return(source.replace(" group", "").replace("/", "_").replace(" Bacteria", "").replace(" ", "_"))
 
@@ -324,6 +329,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
   for row in root_assembly.itertuples():
     genome = AssemblyGenome(row.Index, row.taxid, row.organism_name, row.ftp_path, cacheDir )
     genomes.append(genome)
+  logger.info(f"Total {len(genomes)} genomes ...")
 
   for rep in [1,2,3]:
     #cache all genome
@@ -351,6 +357,27 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
               logger.error(f"Error: downloading {remoteFile} retry {retry} failed.")
               ftp.close()
               ftp = open_ftp()
+
+  #download gtf file
+  logger.error("Downloading gtf files.")
+  with open_ftp() as ftp:
+    currentCount = 0
+    for genome in genomes:
+      currentCount = currentCount + 1
+      localFile = genome.local_fna_path
+      remoteFile = genome.url_file
+
+      if os.path.exists(genome.local_done_path):
+        remoteGtfFile = remoteFile.replace("_genomic.fna.gz", "_genomic.gtf.gz")
+        if check_file_exists(ftp, remoteGtfFile):
+          localGtfFile = localFile.replace("_genomic.fna.gz", "_genomic.gtf.gz")
+          if not os.path.exists(localGtfFile):
+            logger.info(f"Downloading {currentCount}/{len(genomes)}: {os.path.basename(localGtfFile)} ...")
+            with open(localGtfFile, "wb") as f:
+              ftp.retrbinary("RETR " + remoteGtfFile, f.write, 1024)
+        else:
+          logger.error(f"Remote file {remoteGtfFile} not exists.")
+          #raise Exception(f"Remote file {remoteGtfFile} not exists.")
 
   missing_genomes =[g for g in genomes if not os.path.exists(g.local_done_path)] 
   missing_count = len(missing_genomes)
@@ -397,8 +424,20 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
                     rtex=taxonomy.loc[taxonomyId]
                     ftx.write(f"\t{rtex.ScientificName}")
                 ftx.write("\n")
-      fFasta.close() 
+        fFasta.close() 
     writeBowtieIndexList(os.path.join(outputFolder, prefix + ".index.txt"), bowtieIndecies)
+
+    gtf_file = os.path.join(fastaDir, prefix + ".gtf")
+    with open(gtf_file, "wb") as fgtf:
+      with open(gtf_file + ".missing", "wt") as fgtfmiss:
+        for genome in genomes:
+          local_gtf_file = genome.local_fna_path.replace("_genomic.fna.gz", "_genomic.gtf.gz")
+          if(os.path.exists(local_gtf_file)):
+            with gzip.open(local_gtf_file, 'rb') as f:
+              file_content = f.read()
+              fgtf.write(file_content)
+          else:
+            fgtfmiss.write(f"{genome.local_fna_path}\n")
 
   logger.info("Done.")
 
