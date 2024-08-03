@@ -9,7 +9,7 @@ import spcount
 #refseq_file="/data/cqs/references/spcount/20220406_assembly_summary_refseq.txt"
 #species_file="/data/cqs/references/spcount/20220406_bacteria.taxonomy.txt"
 
-taxonomy_file="/data1/shengq2/references/spcount/20221124.taxonomy.txt"
-refseq_file="/data1/shengq2/references/spcount/20221124_assembly_summary.txt"
-species_file="/data1/shengq2/references/spcount/20221124_virus.taxonomy.txt"
-output_dir="/data1/shengq2/references/spcount"
+taxonomy_file="/workspace/shengq2/references/spcount/20240723.taxonomy.txt"
+refseq_file="/workspace/shengq2/references/spcount/20240723_refseq_assembly_summary.txt"
+#species_file="/workspace/shengq2/references/spcount/20240312_virus.taxonomy.txt"
+output_dir="/workspace/shengq2/references/spcount"
