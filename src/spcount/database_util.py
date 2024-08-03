@@ -319,7 +319,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
     os.mkdir(fastaDir)
 
   logger.info(f"Reading assembly summary from {assemblySummaryFile} ...")
-  assembly=pd.read_csv(assemblySummaryFile, sep="\t", header=1, index_col=0)
+  assembly=pd.read_csv(assemblySummaryFile, sep="\t", header=1, index_col=0, low_memory=False)
 
   root_assembly=assembly[assembly.taxid.isin(root_taxonomy.index)]
   if referenceAndRepresentativeOnly:
@@ -329,7 +329,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
   for row in root_assembly.itertuples():
     genome = AssemblyGenome(row.Index, row.taxid, row.organism_name, row.ftp_path, cacheDir )
     genomes.append(genome)
-  logger.info(f"Total {len(genomes)} genomes ...")
+  logger.info(f"Total {len(genomes)} genomes in taxonomy {taxonomyRootId} ...")
 
   for rep in [1,2,3]:
     #cache all genome
@@ -359,7 +359,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
               ftp = open_ftp()
 
   #download gtf file
-  logger.error("Downloading gtf files.")
+  logger.info("Downloading gtf files.")
   with open_ftp() as ftp:
     currentCount = 0
     for genome in genomes:
@@ -368,16 +368,27 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
       remoteFile = genome.url_file
 
       if os.path.exists(genome.local_done_path):
+        localGtfFile = localFile.replace("_genomic.fna.gz", "_genomic.gtf.gz")
+        if(os.path.exists(localGtfFile)):
+          continue
+
+        localGffFile = localFile.replace("_genomic.fna.gz", "_genomic.gff.gz")
+        if(os.path.exists(localGffFile)):
+          continue
+
         remoteGtfFile = remoteFile.replace("_genomic.fna.gz", "_genomic.gtf.gz")
         if check_file_exists(ftp, remoteGtfFile):
-          localGtfFile = localFile.replace("_genomic.fna.gz", "_genomic.gtf.gz")
-          if not os.path.exists(localGtfFile):
-            logger.info(f"Downloading {currentCount}/{len(genomes)}: {os.path.basename(localGtfFile)} ...")
-            with open(localGtfFile, "wb") as f:
-              ftp.retrbinary("RETR " + remoteGtfFile, f.write, 1024)
+          logger.info(f"Downloading {currentCount}/{len(genomes)}: {os.path.basename(localGtfFile)} ...")
+          with open(localGtfFile, "wb") as f:
+            ftp.retrbinary("RETR " + remoteGtfFile, f.write, 1024)
         else:
-          logger.error(f"Remote file {remoteGtfFile} not exists.")
-          #raise Exception(f"Remote file {remoteGtfFile} not exists.")
+          remoteGffFile = remoteFile.replace("_genomic.fna.gz", "_genomic.gff.gz")
+          if check_file_exists(ftp, remoteGffFile):
+            logger.info(f"Downloading {currentCount}/{len(genomes)}: {os.path.basename(localGffFile)} ...")
+            with open(localGffFile, "wb") as f:
+              ftp.retrbinary("RETR " + remoteGffFile, f.write, 1024)
+          else:
+            logger.error(f"Remote file {remoteGtfFile} not exists.")
 
   missing_genomes =[g for g in genomes if not os.path.exists(g.local_done_path)] 
   missing_count = len(missing_genomes)
@@ -394,10 +405,16 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
       ftx.write("chrom\taccession\tscientific_name\ttaxid\trank\t%s\n" % "\t".join(output_ranks))
       findex = 0
       fFasta = None
+      if genomeNumberPerFile == 0:
+        bowtie_index = os.path.join(fastaDir, prefix)
+        cur_file = bowtie_index + ".fa"
+        bowtieIndecies.append(BowtieIndexItem(bowtie_index, root.ScientificName, cur_file))
+        logger.info(f"Writing to {cur_file} ...")
+        fFasta = open(cur_file, "wb")
       gindex = 0
       for genome in genomes:
         gtax = taxonomy.loc[genome.taxid]
-        if gindex % genomeNumberPerFile == 0:
+        if (genomeNumberPerFile > 0) and (gindex % genomeNumberPerFile == 0):
           if fFasta != None:
             fFasta.close()
           findex += 1
@@ -424,7 +441,7 @@ def prepare_segment_database(logger, taxonomyFile, assemblySummaryFile, taxonomy
                     rtex=taxonomy.loc[taxonomyId]
                     ftx.write(f"\t{rtex.ScientificName}")
                 ftx.write("\n")
-        fFasta.close() 
+      fFasta.close() 
     writeBowtieIndexList(os.path.join(outputFolder, prefix + ".index.txt"), bowtieIndecies)
 
     gtf_file = os.path.join(fastaDir, prefix + ".gtf")
